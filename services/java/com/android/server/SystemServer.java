@@ -2757,6 +2757,9 @@ public final class SystemServer implements Dumpable {
                 mSystemServiceManager.startService(BackgroundInstallControlService.class);
                 t.traceEnd();
             }
+            t.traceBegin("SpoofingService");
+            mSystemServiceManager.startService(com.android.server.crdroid.SpoofingService.class);
+            t.traceEnd();
         }
 
         t.traceBegin("StartMediaProjectionManager");
