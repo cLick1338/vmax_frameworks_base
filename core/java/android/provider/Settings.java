@@ -104,6 +104,7 @@ import android.widget.Editor;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.Preconditions;
+import com.android.internal.util.HideDeveloperStatusUtils;
 
 import java.io.IOException;
 import java.lang.annotation.ElementType;
@@ -3589,6 +3590,9 @@ public final class Settings {
 
         @UnsupportedAppUsage
         public String getStringForUser(ContentResolver cr, String name, final int userHandle) {
+            if (HideDeveloperStatusUtils.shouldHideDevStatus(cr, name, userHandle)) {
+                return "0";
+            }
             final boolean isSelf = (userHandle == UserHandle.myUserId());
             final boolean useCache = isSelf && !isInSystemServer();
             boolean needsGenerationTracker = false;
@@ -12617,6 +12621,13 @@ public final class Settings {
          */
         public static final String HBM_SETTING_KEY =
                 "com.android.server.display.HBM_SETTING_KEY";
+
+        /**
+         * Apps that see developer options and USB/Wi-Fi debugging as disabled.
+         * @hide
+         */
+        @Readable
+        public static final String HIDE_DEVELOPER_STATUS = "hide_developer_status";
 
         /** Whether app-facing ROM and root-file hiding is enabled. @hide */
         @Readable
