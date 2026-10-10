@@ -3667,6 +3667,12 @@ public class KeyguardUpdateMonitor implements TrustManager.TrustListener, Dumpab
             return true;
         }
 
+        // change in battery voltage or temperature while plugged in
+        if (nowPluggedIn && (current.voltageMillivolts != old.voltageMillivolts
+                || current.temperatureTenthsCelsius != old.temperatureTenthsCelsius)) {
+            return true;
+        }
+
         // change in battery is present or not
         if (old.present != current.present) {
             return true;

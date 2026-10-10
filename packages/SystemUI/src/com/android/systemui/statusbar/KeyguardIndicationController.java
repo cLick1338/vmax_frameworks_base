@@ -124,10 +124,15 @@ import com.android.systemui.util.wakelock.WakeLock;
 
 import java.io.PrintWriter;
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
 import javax.inject.Inject;
+
+import lineageos.health.HealthInterface;
+import lineageos.providers.LineageSettings;
 
 /**
  * Controls the indications and error messages shown on the Keyguard
@@ -150,6 +155,7 @@ public class KeyguardIndicationController {
     private static final int MSG_SHOW_ACTION_TO_UNLOCK = 1;
     private static final int MSG_RESET_ERROR_MESSAGE_ON_SCREEN_ON = 2;
     private static final long TRANSIENT_BIOMETRIC_ERROR_TIMEOUT = 1300;
+    private static final long BATTERY_DETAILS_REFRESH_INTERVAL_MS = 5000;
     public static final long DEFAULT_MESSAGE_TIME = 3500;
     public static final long DEFAULT_HIDE_DELAY_MS =
             DEFAULT_MESSAGE_TIME + KeyguardIndicationTextView.Y_IN_DURATION;
@@ -219,6 +225,15 @@ public class KeyguardIndicationController {
     private int mChargingWattage;
     private int mBatteryLevel = -1;
     private boolean mBatteryPresent = true;
+    private boolean mBatteryPluggedIn;
+    private int mBatteryVoltageMillivolts = -1;
+    private int mBatteryTemperatureTenthsCelsius = Integer.MIN_VALUE;
+    private int mBatteryCurrentMicroamps = Integer.MIN_VALUE;
+    private int mBatteryChargeLimit = 100;
+    private boolean mBatteryDetailsRefreshPending;
+    private volatile int mBatteryDetailsGeneration;
+    private boolean mDestroyed;
+    private final Runnable mRefreshBatteryDetails = this::refreshBatteryDetails;
     protected long mChargingTimeRemaining;
     private Pair<String, BiometricSourceType> mBiometricErrorMessageToShowOnScreenOn;
     private Set<Integer> mCoExFaceAcquisitionMsgIdsToShow;
@@ -263,6 +278,12 @@ public class KeyguardIndicationController {
                 hideBiometricMessageDelayed(DEFAULT_HIDE_DELAY_MS);
                 mBiometricErrorMessageToShowOnScreenOn = null;
             }
+            updateBatteryDetailsRefresh();
+        }
+
+        @Override
+        public void onScreenTurnedOff() {
+            updateBatteryDetailsRefresh();
         }
     };
     private boolean mFaceLockedOutThisAuthSession;
@@ -440,6 +461,8 @@ public class KeyguardIndicationController {
      * Cleanup
      */
     public void destroy() {
+        mDestroyed = true;
+        mBatteryDetailsGeneration++;
         mHandler.removeCallbacksAndMessages(null);
         mHideBiometricMessageHandler.cancel();
         mHideTransientMessageHandler.cancel();
@@ -613,7 +636,7 @@ public class KeyguardIndicationController {
     }
 
     private void updateLockScreenBatteryMsg(boolean animate) {
-        if (mBatteryPresent && (mPowerPluggedIn || mEnableBatteryDefender)) {
+        if (mBatteryPresent && (mBatteryPluggedIn || mPowerPluggedIn || mEnableBatteryDefender)) {
             String powerIndication = computePowerIndication();
             if (DEBUG_CHARGING_SPEED) {
                 powerIndication += ",  " + (mChargingWattage / 1000) + " mW";
@@ -851,6 +874,7 @@ public class KeyguardIndicationController {
             // If we unlock and return to keyguard quickly, previous error should not be shown
             hideTransientIndication();
         }
+        updateBatteryDetailsRefresh();
     }
 
     private void setPersistentUnlockMessage(String persistentUnlockMessage) {
@@ -1104,6 +1128,12 @@ public class KeyguardIndicationController {
     }
 
     protected String computePowerChargingStringIndication() {
+        if (!mDozing && mBatteryPluggedIn) {
+            String batteryDetails = computeBatteryDetailsIndication();
+            if (batteryDetails != null) {
+                return batteryDetails;
+            }
+        }
         if (mPowerCharged) {
             return mContext.getResources().getString(R.string.keyguard_charged);
         }
@@ -1150,6 +1180,132 @@ public class KeyguardIndicationController {
         } else {
             return mContext.getResources().getString(chargingId, percentage);
         }
+    }
+
+    private String computeBatteryDetailsIndication() {
+        List<String> details = new ArrayList<>();
+        if (mBatteryVoltageMillivolts > 0) {
+            details.add(mContext.getString(R.string.keyguard_battery_voltage,
+                    formatBatteryValue(mBatteryVoltageMillivolts / 1000.0, 2)));
+        }
+        if (mBatteryCurrentMicroamps != Integer.MIN_VALUE) {
+            details.add(mContext.getString(R.string.keyguard_battery_current,
+                    formatBatteryValue(mBatteryCurrentMicroamps / 1000.0, 0)));
+        }
+        if (mBatteryTemperatureTenthsCelsius != Integer.MIN_VALUE) {
+            details.add(mContext.getString(R.string.keyguard_battery_temperature,
+                    formatBatteryValue(mBatteryTemperatureTenthsCelsius / 10.0, 1)));
+        }
+        if (details.isEmpty()) {
+            return null;
+        }
+
+        String target = NumberFormat.getPercentInstance().format(mBatteryChargeLimit / 100f);
+        long remaining = -1;
+        if (mBatteryLevel >= mBatteryChargeLimit) {
+            remaining = 0;
+        } else if (mPowerPluggedIn && mChargingTimeRemaining > 0 && mBatteryLevel >= 0) {
+            // Scale the time-to-full estimate to the configured charge limit.
+            remaining = mChargingTimeRemaining * (mBatteryChargeLimit - mBatteryLevel)
+                    / (100 - mBatteryLevel);
+        }
+        if (remaining >= 0) {
+            String estimate = Formatter.formatShortElapsedTimeRoundingUpToMinutes(
+                    mContext, remaining);
+            details.add(mContext.getString(R.string.keyguard_battery_charge_estimate,
+                    estimate, target));
+        } else {
+            details.add(mContext.getString(R.string.keyguard_battery_charge_target, target));
+        }
+        return TextUtils.join(" · ", details);
+    }
+
+    private String formatBatteryValue(double value, int fractionDigits) {
+        NumberFormat format = NumberFormat.getNumberInstance();
+        format.setGroupingUsed(false);
+        format.setMinimumFractionDigits(fractionDigits);
+        format.setMaximumFractionDigits(fractionDigits);
+        return format.format(value);
+    }
+
+    private boolean shouldRefreshBatteryDetails() {
+        return mInited && !mDestroyed && mVisible && mBatteryPresent && mBatteryPluggedIn
+                && !mDozing && mScreenLifecycle.getScreenState() == SCREEN_ON
+                && mKeyguardStateController.isShowing();
+    }
+
+    private void updateBatteryDetailsRefresh() {
+        if (!shouldRefreshBatteryDetails()) {
+            mHandler.removeCallbacks(mRefreshBatteryDetails);
+            mBatteryDetailsGeneration++;
+        } else if (!mBatteryDetailsRefreshPending
+                && !mHandler.hasCallbacks(mRefreshBatteryDetails)) {
+            mHandler.post(mRefreshBatteryDetails);
+        }
+    }
+
+    private void refreshBatteryDetails() {
+        if (!shouldRefreshBatteryDetails() || mBatteryDetailsRefreshPending) {
+            return;
+        }
+        mBatteryDetailsRefreshPending = true;
+        int userId = getCurrentUser();
+        int generation = mBatteryDetailsGeneration;
+        mBackgroundExecutor.execute(() -> {
+            if (generation != mBatteryDetailsGeneration) {
+                mHandler.post(() -> {
+                    mBatteryDetailsRefreshPending = false;
+                    updateBatteryDetailsRefresh();
+                });
+                return;
+            }
+            BatteryManager batteryManager = mContext.getSystemService(BatteryManager.class);
+            int current = batteryManager == null ? Integer.MIN_VALUE
+                    : batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
+            int limit = getBatteryChargeLimit(userId);
+            long timeRemaining = -1;
+            try {
+                timeRemaining = mBatteryInfo.computeChargeTimeRemaining();
+            } catch (RemoteException e) {
+                mKeyguardLogger.log(TAG, ERROR, "Error calling IBatteryStats", e);
+            }
+            long estimate = timeRemaining;
+            mHandler.post(() -> {
+                mBatteryDetailsRefreshPending = false;
+                if (!shouldRefreshBatteryDetails()) {
+                    return;
+                }
+                if (generation == mBatteryDetailsGeneration && userId == getCurrentUser()) {
+                    mBatteryCurrentMicroamps = current;
+                    mBatteryChargeLimit = limit;
+                    mChargingTimeRemaining = estimate;
+                    updateLockScreenBatteryMsg(false);
+                    mHandler.postDelayed(mRefreshBatteryDetails,
+                            BATTERY_DETAILS_REFRESH_INTERVAL_MS);
+                } else {
+                    mHandler.post(mRefreshBatteryDetails);
+                }
+            });
+        });
+    }
+
+    private int getBatteryChargeLimit(int userId) {
+        if (LineageSettings.System.getIntForUser(mContext.getContentResolver(),
+                LineageSettings.System.CHARGING_CONTROL_ENABLED, 0, userId) == 0) {
+            return 100;
+        }
+        int defaultMode = mContext.getResources().getInteger(
+                org.lineageos.platform.internal.R.integer.config_defaultChargingControlMode);
+        if (LineageSettings.System.getIntForUser(mContext.getContentResolver(),
+                LineageSettings.System.CHARGING_CONTROL_MODE, defaultMode, userId)
+                != HealthInterface.MODE_LIMIT) {
+            return 100;
+        }
+        int defaultLimit = mContext.getResources().getInteger(
+                org.lineageos.platform.internal.R.integer.config_defaultChargingControlLimit);
+        int limit = LineageSettings.System.getIntForUser(mContext.getContentResolver(),
+                LineageSettings.System.CHARGING_CONTROL_LIMIT, defaultLimit, userId);
+        return limit > 0 && limit <= 100 ? limit : 100;
     }
 
     public void setStatusBarKeyguardViewManager(
@@ -1245,6 +1401,11 @@ public class KeyguardIndicationController {
         pw.println("  mBiometricMessageFollowUp: " + mBiometricMessageFollowUp);
         pw.println("  mBatteryLevel: " + mBatteryLevel);
         pw.println("  mBatteryPresent: " + mBatteryPresent);
+        pw.println("  mBatteryPluggedIn: " + mBatteryPluggedIn);
+        pw.println("  mBatteryVoltageMillivolts: " + mBatteryVoltageMillivolts);
+        pw.println("  mBatteryCurrentMicroamps: " + mBatteryCurrentMicroamps);
+        pw.println("  mBatteryTemperatureTenthsCelsius: " + mBatteryTemperatureTenthsCelsius);
+        pw.println("  mBatteryChargeLimit: " + mBatteryChargeLimit);
         pw.println("  AOD text: " + (
                 mTopIndicationView == null ? null : mTopIndicationView.getText()));
         pw.println("  computePowerIndication(): " + computePowerIndication());
@@ -1272,6 +1433,7 @@ public class KeyguardIndicationController {
             boolean isChargingOrFull = status.status == BatteryManager.BATTERY_STATUS_CHARGING
                     || status.isCharged();
             boolean wasPluggedIn = mPowerPluggedIn;
+            int oldBatteryLevel = mBatteryLevel;
             mPowerPluggedInWired = status.isPluggedInWired() && isChargingOrFull;
             mPowerPluggedInWireless = status.isPluggedInWireless() && isChargingOrFull;
             mPowerPluggedInDock = status.isPluggedInDock() && isChargingOrFull;
@@ -1281,6 +1443,17 @@ public class KeyguardIndicationController {
             mChargingSpeed = status.getChargingSpeed(mContext);
             mBatteryLevel = status.level;
             mBatteryPresent = status.present;
+            if (oldBatteryLevel != mBatteryLevel || wasPluggedIn != mPowerPluggedIn) {
+                mBatteryDetailsGeneration++;
+            }
+            if (mBatteryPluggedIn != status.isPluggedIn()) {
+                mBatteryDetailsGeneration++;
+                mBatteryCurrentMicroamps = Integer.MIN_VALUE;
+                mBatteryChargeLimit = 100;
+            }
+            mBatteryPluggedIn = status.isPluggedIn();
+            mBatteryVoltageMillivolts = status.voltageMillivolts;
+            mBatteryTemperatureTenthsCelsius = status.temperatureTenthsCelsius;
             mBatteryDefender = isBatteryDefender(status);
             // when the battery is overheated, device doesn't charge so only guard on pluggedIn:
             mEnableBatteryDefender = mBatteryDefender && status.isPluggedIn();
@@ -1296,6 +1469,7 @@ public class KeyguardIndicationController {
             mKeyguardLogger.logRefreshBatteryInfo(isChargingOrFull, mPowerPluggedIn, mBatteryLevel,
                     mBatteryDefender);
             updateDeviceEntryIndication(!wasPluggedIn && mPowerPluggedInWired);
+            updateBatteryDetailsRefresh();
         }
 
         @Override
@@ -1516,6 +1690,10 @@ public class KeyguardIndicationController {
 
         @Override
         public void onUserSwitchComplete(int userId) {
+            mBatteryDetailsGeneration++;
+            mBatteryChargeLimit = 100;
+            mHandler.removeCallbacks(mRefreshBatteryDetails);
+            updateBatteryDetailsRefresh();
             if (mVisible) {
                 updateDeviceEntryIndication(false);
             }
@@ -1677,6 +1855,7 @@ public class KeyguardIndicationController {
                 hideBiometricMessage();
             }
             updateDeviceEntryIndication(false);
+            updateBatteryDetailsRefresh();
         }
     };
 
@@ -1699,6 +1878,7 @@ public class KeyguardIndicationController {
             } else {
                 updateDeviceEntryIndication(false);
             }
+            updateBatteryDetailsRefresh();
         }
     };
 }

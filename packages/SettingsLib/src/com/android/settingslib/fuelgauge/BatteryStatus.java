@@ -26,6 +26,8 @@ import static android.os.BatteryManager.EXTRA_MAX_CHARGING_VOLTAGE;
 import static android.os.BatteryManager.EXTRA_PLUGGED;
 import static android.os.BatteryManager.EXTRA_PRESENT;
 import static android.os.BatteryManager.EXTRA_STATUS;
+import static android.os.BatteryManager.EXTRA_TEMPERATURE;
+import static android.os.BatteryManager.EXTRA_VOLTAGE;
 import static android.os.OsProtoEnums.BATTERY_PLUGGED_NONE;
 
 import android.content.Context;
@@ -57,6 +59,8 @@ public class BatteryStatus {
     public final int plugged;
     public final int chargingStatus;
     public final int maxChargingWattage;
+    public final int voltageMillivolts;
+    public final int temperatureTenthsCelsius;
     public final boolean present;
     public final Optional<Boolean> incompatibleCharger;
 
@@ -73,6 +77,8 @@ public class BatteryStatus {
         this.plugged = plugged;
         this.chargingStatus = chargingStatus;
         this.maxChargingWattage = maxChargingWattage;
+        this.voltageMillivolts = -1;
+        this.temperatureTenthsCelsius = Integer.MIN_VALUE;
         this.present = present;
         this.incompatibleCharger = Optional.empty();
     }
@@ -96,6 +102,9 @@ public class BatteryStatus {
         this.incompatibleCharger = incompatibleCharger;
 
         maxChargingWattage = calculateMaxChargingMicroWatt(batteryChangedIntent);
+        voltageMillivolts = batteryChangedIntent.getIntExtra(EXTRA_VOLTAGE, -1);
+        temperatureTenthsCelsius = batteryChangedIntent.getIntExtra(EXTRA_TEMPERATURE,
+                Integer.MIN_VALUE);
     }
 
     /** Determine whether the device is plugged. */

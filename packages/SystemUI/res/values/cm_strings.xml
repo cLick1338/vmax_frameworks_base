@@ -18,6 +18,13 @@
  */
 -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Battery measurements and estimated time to the charging target on the lockscreen. -->
+    <string name="keyguard_battery_voltage"><xliff:g id="voltage">%1$s</xliff:g> V</string>
+    <string name="keyguard_battery_current"><xliff:g id="current">%1$s</xliff:g> mA</string>
+    <string name="keyguard_battery_temperature"><xliff:g id="temperature">%1$s</xliff:g> °C</string>
+    <string name="keyguard_battery_charge_estimate"><xliff:g id="time">%1$s</xliff:g> -&gt; <xliff:g id="target">%2$s</xliff:g></string>
+    <string name="keyguard_battery_charge_target">-&gt; <xliff:g id="target">%1$s</xliff:g></string>
+
     <!-- Name of the clock in status bar [CHAR LIMIT=30] -->
     <string name="clock">Clock</string>
 
