@@ -206,7 +206,7 @@ final class ActivityManagerConstants extends ContentObserver {
     private static final int DEFAULT_POWER_CHECK_MAX_CPU_1 = 25;
     private static final int DEFAULT_POWER_CHECK_MAX_CPU_2 = 25;
     private static final int DEFAULT_POWER_CHECK_MAX_CPU_3 = 10;
-    private static final int DEFAULT_POWER_CHECK_MAX_CPU_4 = 2;
+    private static final int DEFAULT_POWER_CHECK_MAX_CPU_4 = 3;
     private static final long DEFAULT_SERVICE_USAGE_INTERACTION_TIME_PRE_S = 30 * 60 * 1000;
     private static final long DEFAULT_SERVICE_USAGE_INTERACTION_TIME_POST_S = 60 * 1000;
     private static final long DEFAULT_USAGE_STATS_INTERACTION_INTERVAL_PRE_S = 2 * 60 * 60 * 1000;
