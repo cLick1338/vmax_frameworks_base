@@ -5243,6 +5243,12 @@ public final class Settings {
         @Readable
         public static final String SCREEN_OFF_TIMEOUT = "screen_off_timeout";
 
+        /** Defines the animation used when the screen turns off. @hide */
+        public static final String SCREEN_OFF_ANIMATION = "screen_off_animation";
+
+        /** Defines the speed of the screen off animation in tenths. @hide */
+        public static final String SCREEN_OFF_ANIMATION_SPEED = "screen_off_animation_speed";
+
         /**
          * The screen backlight brightness between 1 (minimum) and 255 (maximum).
          *
@@ -6506,6 +6512,8 @@ public final class Settings {
             PUBLIC_SETTINGS.add(SYSTEM_LOCALES);
             PUBLIC_SETTINGS.add(DIM_SCREEN);
             PUBLIC_SETTINGS.add(SCREEN_OFF_TIMEOUT);
+            PUBLIC_SETTINGS.add(SCREEN_OFF_ANIMATION);
+            PUBLIC_SETTINGS.add(SCREEN_OFF_ANIMATION_SPEED);
             PUBLIC_SETTINGS.add(SCREEN_BRIGHTNESS);
             PUBLIC_SETTINGS.add(SCREEN_BRIGHTNESS_MODE);
             PUBLIC_SETTINGS.add(MODE_RINGER_STREAMS_AFFECTED);

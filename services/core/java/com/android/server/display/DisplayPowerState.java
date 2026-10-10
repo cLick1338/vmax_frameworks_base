@@ -61,7 +61,7 @@ final class DisplayPowerState {
     private final Handler mHandler;
     private final Choreographer mChoreographer;
     private final DisplayBlanker mBlanker;
-    private final ColorFade mColorFade;
+    private ScreenStateAnimator mColorFade;
     private final PhotonicModulator mPhotonicModulator;
     private final int mDisplayId;
 
@@ -83,22 +83,23 @@ final class DisplayPowerState {
     private volatile boolean mStopped;
 
     DisplayPowerState(
-            DisplayBlanker blanker, ColorFade colorFade, int displayId, int displayState) {
-        this(blanker, colorFade, displayId, displayState, BackgroundThread.getExecutor());
+            DisplayBlanker blanker, int screenAnimatorMode, int displayId, int displayState) {
+        this(blanker, screenAnimatorMode, displayId, displayState,
+                BackgroundThread.getExecutor());
     }
 
     @VisibleForTesting
     DisplayPowerState(
-            DisplayBlanker blanker, ColorFade colorFade, int displayId, int displayState,
+            DisplayBlanker blanker, int screenAnimatorMode, int displayId, int displayState,
             Executor asyncDestroyExecutor) {
         mHandler = new Handler(true /*async*/);
         mChoreographer = Choreographer.getInstance();
         mBlanker = blanker;
-        mColorFade = colorFade;
         mPhotonicModulator = new PhotonicModulator();
         mPhotonicModulator.start();
         mDisplayId = displayId;
         mAsyncDestroyExecutor = asyncDestroyExecutor;
+        setScreenStateAnimator(screenAnimatorMode);
 
         // At boot time, we don't know the screen's brightness,
         // so prepare to set it to a known state when the state is next applied.
@@ -114,6 +115,18 @@ final class DisplayPowerState {
         mColorFadePrepared = false;
         mColorFadeLevel = 1.0f;
         mColorFadeReady = true;
+    }
+
+    public void setScreenStateAnimator(int mode) {
+        if (mColorFade != null) {
+            if (mColorFade instanceof ColorFade) {
+                mColorFade.destroy();
+            } else {
+                mColorFade.dismiss();
+            }
+        }
+        mColorFade = mode == DisplayPowerController.SCREEN_OFF_CRT
+                ? new ElectronBeam(mDisplayId) : new ColorFade(mDisplayId);
     }
 
     public static final FloatProperty<DisplayPowerState> COLOR_FADE_LEVEL =
