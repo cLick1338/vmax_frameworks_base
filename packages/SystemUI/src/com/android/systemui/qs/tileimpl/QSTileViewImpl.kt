@@ -17,6 +17,7 @@
 package com.android.systemui.qs.tileimpl
 
 import android.animation.ArgbEvaluator
+import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
@@ -38,6 +39,7 @@ import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -59,7 +61,6 @@ import androidx.core.graphics.drawable.updateBounds
 import com.android.app.tracing.traceSection
 import com.android.settingslib.Utils
 import com.android.systemui.Flags
-import com.android.systemui.FontSizeUtils
 import com.android.systemui.animation.Expandable
 import com.android.systemui.animation.LaunchableView
 import com.android.systemui.animation.LaunchableViewDelegate
@@ -68,6 +69,7 @@ import com.android.systemui.plugins.qs.QSIconView
 import com.android.systemui.plugins.qs.QSTile
 import com.android.systemui.plugins.qs.QSTile.AdapterState
 import com.android.systemui.plugins.qs.QSTileView
+import com.android.systemui.qs.QSTileSettings
 import com.android.systemui.qs.logging.QSLogger
 import com.android.systemui.qs.tileimpl.QSIconViewImpl.QS_ANIM_LENGTH
 import com.android.systemui.res.R
@@ -167,6 +169,8 @@ constructor(
     private var backgroundColor: Int = 0
     private var backgroundOverlayColor: Int = 0
 
+    private var clickAnimator: ObjectAnimator? = null
+
     private val singleAnimator: ValueAnimator =
         ValueAnimator().apply {
             setDuration(QS_ANIM_LENGTH)
@@ -228,15 +232,12 @@ constructor(
         background = createTileBackground()
         setColor(getBackgroundColorForState(QSTile.State.DEFAULT_STATE))
 
-        val padding = resources.getDimensionPixelSize(R.dimen.qs_tile_padding)
-        val startPadding = resources.getDimensionPixelSize(R.dimen.qs_tile_start_padding)
-        setPaddingRelative(startPadding, padding, padding, padding)
-
         val iconSize = resources.getDimensionPixelSize(R.dimen.qs_icon_size)
         addView(icon, LayoutParams(iconSize, iconSize))
 
         createAndAddLabels()
         createAndAddSideView()
+        applyTileStyle()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration?) {
@@ -260,22 +261,13 @@ constructor(
     }
 
     fun updateResources() {
-        FontSizeUtils.updateFontSize(label, R.dimen.qs_tile_text_size)
-        FontSizeUtils.updateFontSize(secondaryLabel, R.dimen.qs_tile_text_size)
-
         val iconSize = context.resources.getDimensionPixelSize(R.dimen.qs_icon_size)
         icon.layoutParams.apply {
             height = iconSize
             width = iconSize
         }
 
-        val padding = resources.getDimensionPixelSize(R.dimen.qs_tile_padding)
-        val startPadding = resources.getDimensionPixelSize(R.dimen.qs_tile_start_padding)
-        setPaddingRelative(startPadding, padding, padding, padding)
-
         val labelMargin = resources.getDimensionPixelSize(R.dimen.qs_label_container_margin)
-        (labelContainer.layoutParams as MarginLayoutParams).apply { marginStart = labelMargin }
-
         (sideView.layoutParams as MarginLayoutParams).apply { marginStart = labelMargin }
         (chevronView.layoutParams as MarginLayoutParams).apply {
             height = iconSize
@@ -291,6 +283,74 @@ constructor(
         background = createTileBackground()
         setColor(backgroundColor)
         setOverlayColor(backgroundOverlayColor)
+        applyTileStyle()
+    }
+
+    /** Whether the label hiding setting applies; the tile editor always shows labels. */
+    protected open fun canHideLabel(): Boolean = true
+
+    private fun applyTileStyle() {
+        val labelHidden = canHideLabel() && QSTileSettings.isLabelHidden(context)
+        val vertical = QSTileSettings.isVerticalLayout(context)
+        QSTileSettings.updateLabelSize(context, label)
+        QSTileSettings.updateLabelSize(context, secondaryLabel)
+
+        orientation = if (vertical) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+        gravity =
+            if (vertical || labelHidden) Gravity.CENTER else Gravity.CENTER_VERTICAL or Gravity.START
+        val padding =
+            resources.getDimensionPixelSize(
+                if (vertical) R.dimen.qs_tile_vertical_padding else R.dimen.qs_tile_padding
+            )
+        val startPadding =
+            if (vertical || labelHidden) padding
+            else resources.getDimensionPixelSize(R.dimen.qs_tile_start_padding)
+        setPaddingRelative(startPadding, padding, padding, padding)
+
+        labelContainer.visibility = if (labelHidden) GONE else VISIBLE
+        (labelContainer.layoutParams as LayoutParams).apply {
+            width = if (vertical) LayoutParams.MATCH_PARENT else 0
+            weight = if (vertical) 0f else 1f
+            marginStart =
+                if (vertical) 0
+                else resources.getDimensionPixelSize(R.dimen.qs_label_container_margin)
+            topMargin =
+                if (vertical)
+                    resources.getDimensionPixelSize(R.dimen.qs_tile_vertical_label_margin)
+                else 0
+        }
+        val labelGravity = if (vertical) Gravity.CENTER_HORIZONTAL else Gravity.START
+        label.gravity = labelGravity
+        secondaryLabel.gravity = labelGravity
+        sideView.visibility = if (vertical || labelHidden) GONE else VISIBLE
+        requestLayout()
+    }
+
+    private fun onTileClicked() {
+        if (QSTileSettings.isVibrateEnabled(context)) {
+            performHapticFeedback(
+                HapticFeedbackConstants.VIRTUAL_KEY,
+                HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING,
+            )
+        }
+        val property =
+            when (QSTileSettings.getAnimationStyle(context)) {
+                QSTileSettings.ANIMATION_FLIP -> View.ROTATION_Y
+                QSTileSettings.ANIMATION_ROTATE -> View.ROTATION
+                else -> return
+            }
+        if (!animationsEnabled()) return
+        clickAnimator?.cancel()
+        clickAnimator =
+            ObjectAnimator.ofFloat(this, property, 0f, 360f).apply {
+                duration = QSTileSettings.getAnimationDuration(context)
+                interpolator = QSTileSettings.getAnimationInterpolator(context)
+                doOnEnd {
+                    rotation = 0f
+                    rotationY = 0f
+                }
+                start()
+            }
     }
 
     private fun createAndAddLabels() {
@@ -424,7 +484,7 @@ constructor(
             longPressEffect.createExpandableFromView(this)
             initLongPressEffectCallback()
             init(
-                { _: View -> longPressEffect.onTileClick() },
+                { _: View -> if (longPressEffect.onTileClick()) onTileClicked() },
                 { _: View ->
                     longPressEffect.onTileLongClick()
                     true
@@ -433,7 +493,10 @@ constructor(
         } else {
             val expandable = Expandable.fromView(this)
             init(
-                { _: View? -> tile.click(expandable) },
+                { _: View? ->
+                    tile.click(expandable)
+                    onTileClicked()
+                },
                 { _: View? ->
                     tile.longClick(expandable)
                     true

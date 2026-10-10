@@ -95,14 +95,18 @@ public class QSCustomizerController extends ViewController<QSCustomizer> {
         public void onConfigChanged(Configuration newConfig) {
             mView.updateNavBackDrop(newConfig, mLightBarController);
             mView.updateResources();
-            if (mTileAdapter.updateNumColumns()) {
-                RecyclerView.LayoutManager lm = mView.getRecyclerView().getLayoutManager();
-                if (lm instanceof GridLayoutManager) {
-                    ((GridLayoutManager) lm).setSpanCount(mTileAdapter.getNumColumns());
-                }
-            }
+            updateNumColumns();
         }
     };
+
+    private void updateNumColumns() {
+        if (mTileAdapter.updateNumColumns()) {
+            RecyclerView.LayoutManager lm = mView.getRecyclerView().getLayoutManager();
+            if (lm instanceof GridLayoutManager) {
+                ((GridLayoutManager) lm).setSpanCount(mTileAdapter.getNumColumns());
+            }
+        }
+    }
 
     @Inject
     protected QSCustomizerController(QSCustomizer view, TileQueryHelper tileQueryHelper,
@@ -192,6 +196,7 @@ public class QSCustomizerController extends ViewController<QSCustomizer> {
     /** */
     public void show(int x, int y, boolean immediate) {
         if (!mView.isShown()) {
+            updateNumColumns();
             setTileSpecs();
             if (immediate) {
                 mView.showImmediately();

@@ -6471,6 +6471,46 @@ public final class Settings {
         @Readable
         public static final String VOLUME_KEY_CURSOR_CONTROL = "volume_key_cursor_control";
 
+        /** Quick settings columns in portrait, unset for the default. @hide */
+        public static final String QS_LAYOUT_COLUMNS = "qs_layout_columns";
+
+        /** Quick settings columns in landscape, unset for the default. @hide */
+        public static final String QS_LAYOUT_COLUMNS_LANDSCAPE = "qs_layout_columns_landscape";
+
+        /** Quick settings rows per page in portrait, unset for the default. @hide */
+        public static final String QS_LAYOUT_ROWS = "qs_layout_rows";
+
+        /** Quick settings rows per page in landscape, unset for the default. @hide */
+        public static final String QS_LAYOUT_ROWS_LANDSCAPE = "qs_layout_rows_landscape";
+
+        /** Quick quick settings rows in portrait, unset for the default. @hide */
+        public static final String QQS_LAYOUT_ROWS = "qqs_layout_rows";
+
+        /** Quick quick settings rows in landscape, unset for the default. @hide */
+        public static final String QQS_LAYOUT_ROWS_LANDSCAPE = "qqs_layout_rows_landscape";
+
+        /** Whether quick settings tile labels are hidden. @hide */
+        public static final String QS_TILE_LABEL_HIDE = "qs_tile_label_hide";
+
+        /** Quick settings tile label size in sp, unset for the default. @hide */
+        public static final String QS_TILE_LABEL_SIZE = "qs_tile_label_size";
+
+        /** Whether quick settings tiles place the label below the icon. @hide */
+        public static final String QS_TILE_VERTICAL_LAYOUT = "qs_tile_vertical_layout";
+
+        /** Quick settings tile click animation: 0 none, 1 flip, 2 rotate. @hide */
+        public static final String QS_TILE_ANIMATION_STYLE = "qs_tile_animation_style";
+
+        /** Quick settings tile click animation duration in milliseconds. @hide */
+        public static final String QS_TILE_ANIMATION_DURATION = "qs_tile_animation_duration";
+
+        /** Quick settings tile click animation interpolator index. @hide */
+        public static final String QS_TILE_ANIMATION_INTERPOLATOR =
+                "qs_tile_animation_interpolator";
+
+        /** Whether tapping a quick settings tile vibrates. @hide */
+        public static final String QUICK_SETTINGS_VIBRATE = "quick_settings_vibrate";
+
         /**
          * IMPORTANT: If you add a new public settings you also have to add it to
          * PUBLIC_SETTINGS below. If the new setting is hidden you have to add

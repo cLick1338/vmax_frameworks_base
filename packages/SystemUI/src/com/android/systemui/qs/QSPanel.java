@@ -711,7 +711,8 @@ public class QSPanel extends LinearLayout {
 
     void setColumnRowLayout(boolean withMedia) {
         mTileLayout.setMinRows(withMedia ? 2 : 1);
-        mTileLayout.setMaxColumns(withMedia ? 2 : 4);
+        mTileLayout.setMaxColumns(withMedia
+                ? QSTileSettings.getMediaColumns(mContext) : TileLayout.NO_MAX_COLUMNS);
         placeTileLayoutForScene(withMedia);
     }
 

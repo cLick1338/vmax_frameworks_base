@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vmax -->
+<resources>
+    <dimen name="qs_tile_vertical_padding">8dp</dimen>
+    <dimen name="qs_tile_vertical_label_margin">4dp</dimen>
+</resources>

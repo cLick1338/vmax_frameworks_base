@@ -210,6 +210,7 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
 
     @Override
     public void onViewAttachedToWindow(@NonNull View view) {
+        QSTileSettings.addListener(mQsRootView.getContext(), mTileSettingsListener);
         updateAnimators();
         setCurrentPosition();
     }
@@ -217,6 +218,7 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
     @Override
     public void onViewDetachedFromWindow(@NonNull View v) {
         mHost.removeCallback(this);
+        QSTileSettings.removeListener(mTileSettingsListener);
     }
 
     private void addNonFirstPageAnimators(int page) {
@@ -774,6 +776,8 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
                     mQuickQsPanel.setVisibility(View.VISIBLE);
                 }
             };
+
+    private final QSTileSettings.Listener mTileSettingsListener = this::onTilesChanged;
 
     private final Runnable mUpdateAnimators = () -> {
         updateAnimators();

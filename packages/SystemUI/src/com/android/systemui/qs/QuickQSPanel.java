@@ -24,7 +24,6 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.LinearLayout;
 
 import com.android.internal.logging.UiEventLogger;
-import com.android.systemui.FontSizeUtils;
 import com.android.systemui.plugins.qs.QSTile;
 import com.android.systemui.res.R;
 
@@ -42,7 +41,7 @@ public class QuickQSPanel extends QSPanel {
 
     public QuickQSPanel(Context context, AttributeSet attrs) {
         super(context, attrs);
-        mMaxTiles = getResources().getInteger(R.integer.quick_qs_panel_max_tiles);
+        mMaxTiles = QSTileSettings.getQqsMaxTiles(context);
     }
 
     @Override
@@ -162,6 +161,8 @@ public class QuickQSPanel extends QSPanel {
 
     static class QQSSideLabelTileLayout extends SideLabelTileLayout {
 
+        private static final int NO_MAX_ROWS = 100;
+
         private boolean mLastSelected;
 
         QQSSideLabelTileLayout(Context context) {
@@ -171,25 +172,25 @@ public class QuickQSPanel extends QSPanel {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT,
                     LayoutParams.WRAP_CONTENT);
             setLayoutParams(lp);
-            setMaxColumns(4);
+            setMaxColumns(NO_MAX_COLUMNS);
         }
 
         @Override
         public boolean updateResources() {
             mResourceCellHeightResId = R.dimen.qs_quick_tile_size;
-            boolean b = super.updateResources();
-            mMaxAllowedRows = getResources().getInteger(R.integer.quick_qs_panel_max_rows);
-            return b;
+            return super.updateResources();
+        }
+
+        @Override
+        protected int computeMaxAllowedRows() {
+            // The controller caps the tile count, so use as many rows as those tiles need.
+            return NO_MAX_ROWS;
         }
 
         @Override
         protected void estimateCellHeight() {
-            FontSizeUtils.updateFontSize(mTempTextView, R.dimen.qs_tile_text_size);
-            int unspecifiedSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
-            mTempTextView.measure(unspecifiedSpec, unspecifiedSpec);
-            int padding = mContext.getResources().getDimensionPixelSize(R.dimen.qs_tile_padding);
             // the QQS only have 1 label
-            mEstimatedCellHeight = mTempTextView.getMeasuredHeight() + padding * 2;
+            mEstimatedCellHeight = QSTileSettings.estimateCellHeight(mContext, mTempTextView, 1);
         }
 
         @Override

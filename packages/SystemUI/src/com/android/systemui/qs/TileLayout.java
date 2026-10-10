@@ -15,7 +15,6 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.logging.UiEventLogger;
-import com.android.systemui.FontSizeUtils;
 import com.android.systemui.flags.Flags;
 import com.android.systemui.flags.RefactorFlag;
 import com.android.systemui.qs.QSPanel.QSTileLayout;
@@ -151,26 +150,35 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
         int columns = useSmallLandscapeLockscreenResources()
                 ? res.getInteger(R.integer.small_land_lockscreen_quick_settings_num_columns)
                 : res.getInteger(R.integer.quick_settings_num_columns);
-        mResourceColumns = Math.max(1, columns);
+        mResourceColumns = Math.max(1, QSTileSettings.getColumns(mContext, columns));
         mResourceCellHeight = res.getDimensionPixelSize(mResourceCellHeightResId);
         mCellMarginHorizontal = res.getDimensionPixelSize(R.dimen.qs_tile_margin_horizontal);
         mSidePadding = useSidePadding() ? mCellMarginHorizontal / 2 : 0;
         mCellMarginVertical= res.getDimensionPixelSize(R.dimen.qs_tile_margin_vertical);
-        int rows = useSmallLandscapeLockscreenResources()
-                ? res.getInteger(R.integer.small_land_lockscreen_quick_settings_max_rows)
-                : res.getInteger(R.integer.quick_settings_max_rows);
-        mMaxAllowedRows = Math.max(1, rows);
-        if (mLessRows) {
-            mMaxAllowedRows = Math.max(mMinRows, mMaxAllowedRows - 1);
-        }
+        final int oldMaxAllowedRows = mMaxAllowedRows;
+        mMaxAllowedRows = computeMaxAllowedRows();
         // update estimated cell height under current font scaling
         mTempTextView.dispatchConfigurationChanged(mContext.getResources().getConfiguration());
         estimateCellHeight();
-        if (updateColumns()) {
+        if (updateColumns() | oldMaxAllowedRows != mMaxAllowedRows) {
             requestLayout();
             return true;
         }
         return false;
+    }
+
+    protected int getResourceMaxRows() {
+        return useSmallLandscapeLockscreenResources()
+                ? getResources().getInteger(R.integer.small_land_lockscreen_quick_settings_max_rows)
+                : getResources().getInteger(R.integer.quick_settings_max_rows);
+    }
+
+    protected int computeMaxAllowedRows() {
+        int rows = Math.max(1, QSTileSettings.getRows(mContext, getResourceMaxRows()));
+        if (mLessRows) {
+            rows = Math.max(mMinRows, rows - 1);
+        }
+        return rows;
     }
 
     // TODO (b/293252410) remove condition here when flag is launched
@@ -262,11 +270,7 @@ public class TileLayout extends ViewGroup implements QSTileLayout {
 
     // Estimate the height for the tile with 2 labels (general case) under current font scaling.
     protected void estimateCellHeight() {
-        FontSizeUtils.updateFontSize(mTempTextView, R.dimen.qs_tile_text_size);
-        int unspecifiedSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
-        mTempTextView.measure(unspecifiedSpec, unspecifiedSpec);
-        int padding = mContext.getResources().getDimensionPixelSize(R.dimen.qs_tile_padding);
-        mEstimatedCellHeight = mTempTextView.getMeasuredHeight() * 2 + padding * 2;
+        mEstimatedCellHeight = QSTileSettings.estimateCellHeight(mContext, mTempTextView, 2);
     }
 
     protected int getCellHeight() {

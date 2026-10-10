@@ -51,6 +51,10 @@ class CustomizeTileView(context: Context) : QSTileViewImpl(context, collapsed = 
         }
     }
 
+    override fun canHideLabel(): Boolean {
+        return false
+    }
+
     override fun animationsEnabled(): Boolean {
         return false
     }

@@ -95,6 +95,8 @@ public abstract class QSPanelControllerBase<T extends QSPanel> extends ViewContr
 
     private final QSHost.Callback mQSHostCallback = this::setTiles;
 
+    private final QSTileSettings.Listener mTileSettingsListener = this::onTileSettingsChanged;
+
     private SplitShadeStateController mSplitShadeStateController;
 
     private final Provider<QSLongPressEffect> mLongPressEffectProvider;
@@ -148,6 +150,21 @@ public abstract class QSPanelControllerBase<T extends QSPanel> extends ViewContr
 
     protected void onConfigurationChanged() { }
 
+    private void onTileSettingsChanged() {
+        if (mDestroyed) return;
+        for (TileRecord record : mRecords) {
+            if (record.tileView instanceof QSTileViewImpl) {
+                ((QSTileViewImpl) record.tileView).updateResources();
+            }
+        }
+        mView.updateResources();
+        onConfigurationChanged();
+        if (!SceneContainerFlag.isEnabled()) {
+            switchTileLayout(true);
+        }
+        ((View) mView.getTileLayout()).requestLayout();
+    }
+
     protected void onSplitShadeChanged(boolean shouldUseSplitNotificationShade) { }
 
     private final Function1<Boolean, Unit> mMediaHostVisibilityListener = (visible) -> {
@@ -196,6 +213,7 @@ public abstract class QSPanelControllerBase<T extends QSPanel> extends ViewContr
         mView.initialize(mQSLogger, mUsingMediaPlayer);
         mQSLogger.logAllTilesChangeListening(mView.isListening(), mView.getDumpableTag(), "");
         mHost.addCallback(mQSHostCallback);
+        QSTileSettings.addListener(getContext(), mTileSettingsListener);
         if (SceneContainerFlag.isEnabled()) {
             registerForMediaInteractorChanges();
         }
@@ -218,6 +236,7 @@ public abstract class QSPanelControllerBase<T extends QSPanel> extends ViewContr
         // will remove the attach listener. We don't need to do that, because once this object is
         // detached from the graph, it will be gc.
         mHost.removeCallback(mQSHostCallback);
+        QSTileSettings.removeListener(mTileSettingsListener);
         mDestroyed = true;
         for (TileRecord record : mRecords) {
             record.tile.removeCallback(record.callback);
