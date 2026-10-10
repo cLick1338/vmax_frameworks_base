@@ -23,6 +23,7 @@ import static android.content.res.Configuration.UI_MODE_TYPE_MASK;
 import static android.os.Process.SYSTEM_UID;
 import static android.provider.Settings.Global.DEVELOPMENT_FORCE_DESKTOP_MODE_ON_EXTERNAL_DISPLAYS;
 import static android.view.Display.FLAG_SHOULD_SHOW_SYSTEM_DECORATIONS;
+import static android.view.WindowManagerPolicyConstants.NAV_BAR_MODE_3BUTTON;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -33,6 +34,7 @@ import android.content.res.Resources;
 import android.graphics.Insets;
 import android.graphics.Rect;
 import android.os.SystemProperties;
+import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Size;
@@ -47,6 +49,7 @@ import androidx.annotation.VisibleForTesting;
 
 import com.android.internal.R;
 import com.android.internal.policy.SystemBarUtils;
+import com.android.internal.util.NavigationBarUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -87,6 +90,8 @@ public class DisplayLayout {
     private boolean mNavigationBarCanMove = false;
     private boolean mReverseDefaultRotation = false;
     private InsetsState mInsetsState = new InsetsState();
+    private ContentResolver mContentResolver;
+    private int mNavigationBarHeightScale = NavigationBarUtils.HEIGHT_DEFAULT;
 
     /**
      * Different from {@link #equals(Object)}, this method compares the basic geometry properties
@@ -121,6 +126,7 @@ public class DisplayLayout {
                 && mNavigationBarCanMove == other.mNavigationBarCanMove
                 && mReverseDefaultRotation == other.mReverseDefaultRotation
                 && mNavBarFrameHeight == other.mNavBarFrameHeight
+                && mNavigationBarHeightScale == other.mNavigationBarHeightScale
                 && mTaskbarFrameHeight == other.mTaskbarFrameHeight
                 && Objects.equals(mInsetsState, other.mInsetsState);
     }
@@ -129,7 +135,8 @@ public class DisplayLayout {
     public int hashCode() {
         return Objects.hash(mUiMode, mWidth, mHeight, mCutout, mRotation, mDensityDpi,
                 mNonDecorInsets, mStableInsets, mHasNavigationBar, mHasStatusBar,
-                mNavBarFrameHeight, mTaskbarFrameHeight, mAllowSeamlessRotationDespiteNavBarMoving,
+                mNavBarFrameHeight, mNavigationBarHeightScale, mTaskbarFrameHeight,
+                mAllowSeamlessRotationDespiteNavBarMoving,
                 mNavigationBarCanMove, mReverseDefaultRotation, mInsetsState);
     }
 
@@ -154,6 +161,7 @@ public class DisplayLayout {
      * @param context Used for resources.
      */
     public DisplayLayout(@NonNull Context context, @NonNull Display rawDisplay) {
+        mContentResolver = context.getContentResolver();
         final int displayId = rawDisplay.getDisplayId();
         DisplayInfo info = new DisplayInfo();
         rawDisplay.getDisplayInfo(info);
@@ -167,6 +175,8 @@ public class DisplayLayout {
 
     /** sets this DisplayLayout to a copy of another on. */
     public void set(DisplayLayout dl) {
+        mContentResolver = dl.mContentResolver;
+        mNavigationBarHeightScale = dl.mNavigationBarHeightScale;
         mUiMode = dl.mUiMode;
         mWidth = dl.mWidth;
         mHeight = dl.mHeight;
@@ -199,7 +209,26 @@ public class DisplayLayout {
             R.bool.config_allowSeamlessRotationDespiteNavBarMoving);
         mNavigationBarCanMove = res.getBoolean(R.bool.config_navBarCanMove);
         mReverseDefaultRotation = res.getBoolean(R.bool.config_reverseDefaultRotation);
+        mNavigationBarHeightScale = readNavigationBarHeightScale(res);
         recalcInsets(res);
+    }
+
+    boolean updateNavigationBarHeightScale(Resources res) {
+        final int scale = readNavigationBarHeightScale(res);
+        if (scale == mNavigationBarHeightScale) return false;
+        mNavigationBarHeightScale = scale;
+        recalcInsets(res);
+        return true;
+    }
+
+    private int readNavigationBarHeightScale(Resources res) {
+        if (mContentResolver == null) return NavigationBarUtils.HEIGHT_DEFAULT;
+        final int mode = Settings.Secure.getIntForUser(mContentResolver,
+                Settings.Secure.NAVIGATION_MODE,
+                res.getInteger(R.integer.config_navBarInteractionMode), UserHandle.USER_CURRENT);
+        return mode == NAV_BAR_MODE_3BUTTON
+                ? NavigationBarUtils.getHeightScale(mContentResolver, UserHandle.USER_CURRENT)
+                : NavigationBarUtils.HEIGHT_DEFAULT;
     }
 
     /**
@@ -213,12 +242,14 @@ public class DisplayLayout {
     @VisibleForTesting
     void recalcInsets(Resources res) {
         computeNonDecorInsets(res, mRotation, mWidth, mHeight, mCutout, mInsetsState, mUiMode,
-                mNonDecorInsets, mHasNavigationBar);
+                mNonDecorInsets, mHasNavigationBar, mNavigationBarHeightScale);
         mStableInsets.set(mNonDecorInsets);
         if (mHasStatusBar) {
             convertNonDecorInsetsToStableInsets(res, mStableInsets, mCutout, mHasStatusBar);
         }
-        mNavBarFrameHeight = getNavigationBarFrameHeight(res, /* landscape */ mWidth > mHeight);
+        mNavBarFrameHeight = NavigationBarUtils.scaleSize(
+                getNavigationBarFrameHeight(res, /* landscape */ mWidth > mHeight),
+                mNavigationBarHeightScale);
         mTaskbarFrameHeight = SystemBarUtils.getTaskbarHeight(res);
     }
 
@@ -386,6 +417,13 @@ public class DisplayLayout {
     static void computeNonDecorInsets(Resources res, int displayRotation, int displayWidth,
             int displayHeight, DisplayCutout displayCutout, InsetsState insetsState, int uiMode,
             Rect outInsets, boolean hasNavigationBar) {
+        computeNonDecorInsets(res, displayRotation, displayWidth, displayHeight, displayCutout,
+                insetsState, uiMode, outInsets, hasNavigationBar, NavigationBarUtils.HEIGHT_DEFAULT);
+    }
+
+    private static void computeNonDecorInsets(Resources res, int displayRotation, int displayWidth,
+            int displayHeight, DisplayCutout displayCutout, InsetsState insetsState, int uiMode,
+            Rect outInsets, boolean hasNavigationBar, int heightScale) {
         outInsets.setEmpty();
 
         // Only navigation bar
@@ -396,7 +434,8 @@ public class DisplayLayout {
                     false /* ignoreVisibility */);
             int position = navigationBarPosition(res, displayWidth, displayHeight, displayRotation);
             int navBarSize =
-                    getNavigationBarSize(res, position, displayWidth > displayHeight, uiMode);
+                    NavigationBarUtils.scaleSize(getNavigationBarSize(
+                            res, position, displayWidth > displayHeight, uiMode), heightScale);
             if (position == NAV_BAR_BOTTOM) {
                 outInsets.bottom = Math.max(insets.bottom , navBarSize);
             } else if (position == NAV_BAR_RIGHT) {

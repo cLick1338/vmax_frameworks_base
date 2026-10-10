@@ -12181,6 +12181,18 @@ public final class Settings {
         public static final String NAV_BAR_KIDS_MODE = "nav_bar_kids_mode";
 
         /**
+         * 3-button navigation bar thickness as a percentage of its default.
+         * @hide
+         */
+        public static final String BUTTON_NAVIGATION_HEIGHT = "button_navigation_height";
+
+        /**
+         * Opaque 3-button icon color, or 0 for automatic contrast.
+         * @hide
+         */
+        public static final String BUTTON_NAVIGATION_ICON_COLOR = "button_navigation_icon_color";
+
+        /**
          * Navigation bar mode.
          *  0 = 3 button
          *  1 = 2 button

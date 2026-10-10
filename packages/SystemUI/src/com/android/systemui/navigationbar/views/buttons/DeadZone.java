@@ -76,6 +76,7 @@ public class DeadZone {
     private boolean mVertical;
     private long mLastPokeTime;
     private int mDisplayRotation;
+    private float mSizeScale = 1f;
     private final int mDisplayId;
 
     private final Runnable mDebugFlash = new Runnable() {
@@ -105,10 +106,15 @@ public class DeadZone {
             return 0;
         long dt = (now - mLastPokeTime);
         if (dt > mHold + mDecay)
-            return mSizeMin;
+            return mSizeMin * mSizeScale;
         if (dt < mHold)
-            return mSizeMax;
-        return (int) lerp(mSizeMax, mSizeMin, (float) (dt - mHold) / mDecay);
+            return mSizeMax * mSizeScale;
+        return (int) lerp(mSizeMax * mSizeScale, mSizeMin * mSizeScale,
+                (float) (dt - mHold) / mDecay);
+    }
+
+    public void setSizeScale(float scale) {
+        mSizeScale = scale;
     }
 
     public void setFlashOnTouchCapture(boolean dbg) {

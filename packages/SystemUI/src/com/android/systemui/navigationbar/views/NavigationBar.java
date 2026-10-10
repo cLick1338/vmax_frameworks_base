@@ -58,6 +58,7 @@ import android.app.IActivityTaskManager;
 import android.app.StatusBarManager;
 import android.content.Context;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.Insets;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
@@ -71,7 +72,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.RemoteException;
 import android.os.Trace;
+import android.os.UserHandle;
 import android.provider.DeviceConfig;
+import android.provider.Settings;
 import android.telecom.TelecomManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -107,6 +110,7 @@ import com.android.internal.logging.UiEventLogger;
 import com.android.internal.logging.nano.MetricsProto.MetricsEvent;
 import com.android.internal.statusbar.LetterboxDetails;
 import com.android.internal.util.LatencyTracker;
+import com.android.internal.util.NavigationBarUtils;
 import com.android.internal.view.AppearanceRegion;
 import com.android.systemui.Gefingerpoken;
 import com.android.systemui.assist.AssistManager;
@@ -258,6 +262,8 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
     private boolean mTransientShown;
     private boolean mTransientShownFromGestureOnSystemBar;
     private int mNavBarMode = NAV_BAR_MODE_3BUTTON;
+
+    private final ContentObserver mButtonNavigationObserver;
     private LightBarController mLightBarController;
     private final LightBarController mMainLightBarController;
     private final LightBarController.Factory mLightBarControllerFactory;
@@ -624,6 +630,12 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         mNavigationBarTransitions = navigationBarTransitions;
         mBackAnimation = backAnimation;
         mHandler = mainHandler;
+        mButtonNavigationObserver = new ContentObserver(mHandler) {
+            @Override
+            public void onChange(boolean selfChange) {
+                updateButtonNavigationSettings();
+            }
+        };
         mUiEventLogger = uiEventLogger;
         mNavBarHelper = navBarHelper;
         mNotificationShadeDepthController = notificationShadeDepthController;
@@ -812,6 +824,13 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         checkNavBarModes();
 
         mUserTracker.addCallback(mUserChangedCallback, mContext.getMainExecutor());
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.BUTTON_NAVIGATION_HEIGHT), false,
+                mButtonNavigationObserver, UserHandle.USER_ALL);
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.BUTTON_NAVIGATION_ICON_COLOR), false,
+                mButtonNavigationObserver, UserHandle.USER_ALL);
+        updateButtonNavigationSettings();
         mWakefulnessLifecycle.addObserver(mWakefulnessObserver);
         notifyNavigationBarScreenOn();
 
@@ -855,6 +874,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         getBarTransitions().destroy();
         mOverviewProxyService.removeCallback(mOverviewProxyListener);
         mUserTracker.removeCallback(mUserChangedCallback);
+        mContext.getContentResolver().unregisterContentObserver(mButtonNavigationObserver);
         mWakefulnessLifecycle.removeObserver(mWakefulnessObserver);
         if (mOrientationHandle != null) {
             resetSecondaryHandle();
@@ -1293,6 +1313,17 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         prepareNavigationBarView();
 
         mWindowManager.updateViewLayout(mFrame, getBarLayoutParams(rotation));
+    }
+
+    private void updateButtonNavigationSettings() {
+        mView.setButtonNavigationHeightScale(mNavBarMode == NAV_BAR_MODE_3BUTTON
+                ? NavigationBarUtils.getHeightScale(
+                        mContext.getContentResolver(), mUserTracker.getUserId())
+                : NavigationBarUtils.HEIGHT_DEFAULT);
+        mView.setButtonIconColor(mNavBarMode == NAV_BAR_MODE_3BUTTON
+                ? NavigationBarUtils.getIconColor(
+                        mContext.getContentResolver(), mUserTracker.getUserId()) : 0);
+        repositionNavigationBar(mCurrentRotation);
     }
 
     private void updateScreenPinningGestures() {
@@ -1784,6 +1815,19 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
                     break;
             }
         }
+        if (mNavBarMode == NAV_BAR_MODE_3BUTTON) {
+            final int scale = NavigationBarUtils.getHeightScale(
+                    mContext.getContentResolver(), mUserTracker.getUserId());
+            if (height > 0) {
+                height = NavigationBarUtils.scaleSize(height, scale);
+            }
+            if (width > 0) {
+                width = NavigationBarUtils.scaleSize(width, scale);
+            }
+            if (insetsHeight >= 0) {
+                insetsHeight = NavigationBarUtils.scaleSize(insetsHeight, scale);
+            }
+        }
         WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                 width,
                 height,
@@ -1866,6 +1910,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
                 public void onUserChanged(int newUser, @NonNull Context userContext) {
                     // The accessibility settings may be different for the new user
                     updateAccessibilityStateFlags();
+                    updateButtonNavigationSettings();
                 }
             };
 
@@ -2032,7 +2077,7 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
             // Update the window layout params when the nav mode changes as that will affect the
             // system gesture insets
             setNavBarMode(mode);
-            repositionNavigationBar(mCurrentRotation);
+            updateButtonNavigationSettings();
 
             if (!canShowSecondaryHandle()) {
                 resetSecondaryHandle();

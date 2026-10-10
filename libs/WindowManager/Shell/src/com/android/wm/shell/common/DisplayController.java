@@ -17,11 +17,17 @@
 package com.android.wm.shell.common;
 
 import android.annotation.Nullable;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.Configuration;
+import android.database.ContentObserver;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
 import android.os.RemoteException;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.ArraySet;
 import android.util.Size;
 import android.util.Slog;
@@ -77,6 +83,24 @@ public class DisplayController {
      * Initializes the window listener.
      */
     public void onInit() {
+        final ContentObserver navigationObserver = new ContentObserver(null) {
+            @Override
+            public void onChange(boolean selfChange) {
+                mMainExecutor.execute(DisplayController.this::updateNavigationBarHeight);
+            }
+        };
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.BUTTON_NAVIGATION_HEIGHT), false,
+                navigationObserver, UserHandle.USER_ALL);
+        mContext.getContentResolver().registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.NAVIGATION_MODE), false,
+                navigationObserver, UserHandle.USER_ALL);
+        mContext.registerReceiver(new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                mMainExecutor.execute(DisplayController.this::updateNavigationBarHeight);
+            }
+        }, new IntentFilter(Intent.ACTION_USER_SWITCHED));
         try {
             int[] displayIds = mWmService.registerDisplayWindowListener(mDisplayContainerListener);
             for (int i = 0; i < displayIds.length; i++) {
@@ -84,6 +108,23 @@ public class DisplayController {
             }
         } catch (RemoteException e) {
             throw new RuntimeException("Unable to register display controller");
+        }
+    }
+
+    private void updateNavigationBarHeight() {
+        synchronized (mDisplays) {
+            for (int i = 0; i < mDisplays.size(); i++) {
+                final DisplayRecord record = mDisplays.valueAt(i);
+                final Configuration config = record.mContext.getResources().getConfiguration();
+                if (!record.mDisplayLayout.updateNavigationBarHeightScale(
+                        record.mContext.getResources())) {
+                    continue;
+                }
+                for (int j = 0; j < mDisplayChangedListeners.size(); j++) {
+                    mDisplayChangedListeners.get(j).onDisplayConfigurationChanged(
+                            mDisplays.keyAt(i), new Configuration(config));
+                }
+            }
         }
     }
 

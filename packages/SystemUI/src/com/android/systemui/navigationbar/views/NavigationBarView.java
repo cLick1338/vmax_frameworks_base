@@ -124,6 +124,7 @@ public class NavigationBarView extends FrameLayout {
     private Context mLightContext;
     private int mLightIconColor;
     private int mDarkIconColor;
+    private int mButtonIconColor;
 
     private EdgeBackGestureHandler mEdgeBackGestureHandler;
     private DisplayTracker mDisplayTracker;
@@ -530,8 +531,21 @@ public class NavigationBarView extends FrameLayout {
     }
 
     private KeyButtonDrawable getDrawable(@DrawableRes int icon) {
-        return KeyButtonDrawable.create(mLightContext, mLightIconColor, mDarkIconColor, icon,
+        final int lightColor = mButtonIconColor != 0 ? mButtonIconColor : mLightIconColor;
+        final int darkColor = mButtonIconColor != 0 ? mButtonIconColor : mDarkIconColor;
+        return KeyButtonDrawable.create(mLightContext, lightColor, darkColor, icon,
                 true /* hasShadow */, null /* ovalBackgroundColor */);
+    }
+
+    void setButtonIconColor(int color) {
+        if (mButtonIconColor == color) return;
+        mButtonIconColor = color;
+        reloadNavIcons();
+        updateNavButtonIcons();
+    }
+
+    void setButtonNavigationHeightScale(int scale) {
+        mDeadZone.setSizeScale(scale / 100f);
     }
 
     /** To be called when screen lock/unlock state changes */
