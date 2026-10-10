@@ -557,6 +557,9 @@ public class QSAnimator implements QSHost.Callback, PagedTileLayout.PageListener
         mBrightnessOpacityAnimator = null;
         View qsBrightness = mQsPanelController.getBrightnessView();
         View qqsBrightness = mQuickQSPanelController.getBrightnessView();
+        // clearAnimationState() may have forced a hidden slider visible.
+        mQsPanelController.applyBrightnessVisibility();
+        mQuickQSPanelController.applyBrightnessVisibility();
         if (qqsBrightness != null && qqsBrightness.getVisibility() == View.VISIBLE) {
             // animating in split shade mode
             mAnimatedQsViews.add(qsBrightness);

@@ -3,4 +3,12 @@
 <resources>
     <dimen name="qs_tile_vertical_padding">8dp</dimen>
     <dimen name="qs_tile_vertical_label_margin">4dp</dimen>
+
+    <!-- Brightness slider below the tiles, and in the collapsed panel -->
+    <dimen name="qs_bottom_brightness_margin_top">8dp</dimen>
+    <dimen name="qs_bottom_brightness_margin_bottom">4dp</dimen>
+    <dimen name="qqs_top_brightness_margin_top">4dp</dimen>
+    <dimen name="qqs_top_brightness_margin_bottom">8dp</dimen>
+    <dimen name="qqs_bottom_brightness_margin_top">8dp</dimen>
+    <dimen name="qqs_bottom_brightness_margin_bottom">4dp</dimen>
 </resources>

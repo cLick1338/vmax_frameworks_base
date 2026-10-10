@@ -27,6 +27,9 @@ import android.database.ContentObserver;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.UserHandle;
 import android.util.ArrayMap;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -88,6 +91,8 @@ public class QSPanel extends LinearLayout {
 
     private ContentObserver mContentObserver;
     private boolean mIsAutomaticBrightnessAvailable = false;
+    private int mBrightnessSliderMode = 1;
+    protected boolean mBrightnessTop = true;
 
     private final List<OnConfigurationChangedListener> mOnConfigurationChangedListeners =
             new ArrayList<>();
@@ -143,7 +148,11 @@ public class QSPanel extends LinearLayout {
         mIsAutomaticBrightnessAvailable = getResources().getBoolean(
                 com.android.internal.R.bool.config_automatic_brightness_available);
 
-        mContentObserver = new ContentObserver(null) {
+        mBrightnessTop = LineageSettings.Secure.getIntForUser(context.getContentResolver(),
+                LineageSettings.Secure.QS_BRIGHTNESS_SLIDER_POSITION, 0,
+                UserHandle.USER_CURRENT) == 0;
+
+        mContentObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
             @Override
             public void onChange(boolean selfChange, @Nullable Uri uri) {
                 if (LineageSettings.Secure.getUriFor(
@@ -153,11 +162,22 @@ public class QSPanel extends LinearLayout {
                             LineageSettings.Secure.getString(mContext.getContentResolver(),
                                     LineageSettings.Secure.QS_SHOW_AUTO_BRIGHTNESS));
                 } else if (LineageSettings.Secure.getUriFor(
-                            LineageSettings.Secure.QS_SHOW_BRIGHTNESS_SLIDER).equals(uri)
-                        && mBrightnessView != null) {
-                    updateViewVisibilityForTuningValue(mBrightnessView,
-                            LineageSettings.Secure.getString(mContext.getContentResolver(),
-                                    LineageSettings.Secure.QS_SHOW_BRIGHTNESS_SLIDER));
+                            LineageSettings.Secure.QS_SHOW_BRIGHTNESS_SLIDER).equals(uri)) {
+                    mBrightnessSliderMode = LineageSettings.Secure.getIntForUser(
+                            mContext.getContentResolver(),
+                            LineageSettings.Secure.QS_SHOW_BRIGHTNESS_SLIDER, 1,
+                            UserHandle.USER_CURRENT);
+                    applyBrightnessVisibility();
+                } else if (LineageSettings.Secure.getUriFor(
+                            LineageSettings.Secure.QS_BRIGHTNESS_SLIDER_POSITION).equals(uri)) {
+                    final boolean top = LineageSettings.Secure.getIntForUser(
+                            mContext.getContentResolver(),
+                            LineageSettings.Secure.QS_BRIGHTNESS_SLIDER_POSITION, 0,
+                            UserHandle.USER_CURRENT) == 0;
+                    if (top != mBrightnessTop) {
+                        mBrightnessTop = top;
+                        updateBrightnessSliderPosition();
+                    }
                 }
             }
         };
@@ -239,7 +259,8 @@ public class QSPanel extends LinearLayout {
      */
     public void setBrightnessView(@NonNull View view) {
         if (mBrightnessView != null) {
-            removeView(mBrightnessView);
+            ViewGroup parent = (ViewGroup) mBrightnessView.getParent();
+            if (parent != null) parent.removeView(mBrightnessView);
             mChildrenLayoutTop.remove(mBrightnessView);
             mMovableContentStartIndex--;
         }
@@ -250,20 +271,44 @@ public class QSPanel extends LinearLayout {
         setBrightnessViewMargin();
 
         mMovableContentStartIndex++;
+        applyBrightnessVisibility();
+        if (!mBrightnessTop) updateBrightnessSliderPosition();
     }
 
-    private void setBrightnessViewMargin() {
+    protected void setBrightnessViewMargin() {
         if (mBrightnessView != null) {
             MarginLayoutParams lp = (MarginLayoutParams) mBrightnessView.getLayoutParams();
             // For Brightness Slider to extend its boundary to draw focus background
             int offset = getResources()
                     .getDimensionPixelSize(R.dimen.rounded_slider_boundary_offset);
-            lp.topMargin = mContext.getResources()
-                    .getDimensionPixelSize(R.dimen.qs_brightness_margin_top) - offset;
-            lp.bottomMargin = mContext.getResources()
-                    .getDimensionPixelSize(R.dimen.qs_brightness_margin_bottom) - offset;
+            lp.topMargin = mContext.getResources().getDimensionPixelSize(mBrightnessTop
+                    ? R.dimen.qs_brightness_margin_top
+                    : R.dimen.qs_bottom_brightness_margin_top) - offset;
+            lp.bottomMargin = mContext.getResources().getDimensionPixelSize(mBrightnessTop
+                    ? R.dimen.qs_brightness_margin_bottom
+                    : R.dimen.qs_bottom_brightness_margin_bottom) - offset;
             mBrightnessView.setLayoutParams(lp);
         }
+    }
+
+    /** Whether the slider shows for the given {@code qs_show_brightness_slider} mode. */
+    protected boolean isBrightnessSliderShown(int mode) {
+        return mode != 0;
+    }
+
+    /** Re-applies the slider visibility from settings, e.g. after QSAnimator forced it. */
+    void applyBrightnessVisibility() {
+        if (mBrightnessView != null) {
+            mBrightnessView.setVisibility(
+                    isBrightnessSliderShown(mBrightnessSliderMode) ? VISIBLE : GONE);
+        }
+    }
+
+    private void updateBrightnessSliderPosition() {
+        setBrightnessViewMargin();
+        if (mTileLayout == null) return;
+        ViewGroup parent = (ViewGroup) ((View) mTileLayout).getParent();
+        if (parent != null) switchAllContentToParent(parent, mTileLayout);
     }
 
     /** */
@@ -510,11 +555,22 @@ public class QSPanel extends LinearLayout {
     }
 
     private void switchAllContentToParent(ViewGroup parent, QSTileLayout newLayout) {
-        int index = parent == this ? mMovableContentStartIndex : 0;
+        final boolean brightnessBelowTiles = mBrightnessView != null && !mBrightnessTop;
+        if (mBrightnessView != null && mBrightnessTop) {
+            switchToParent(mBrightnessView, this, 0);
+        }
+        // The brightness slider only precedes the movable content while it is on top.
+        int index = parent == this
+                ? mMovableContentStartIndex - (brightnessBelowTiles ? 1 : 0) : 0;
 
         // Let's first move the tileLayout to the new parent, since that should come first.
         switchToParent((View) newLayout, parent, index);
         index++;
+
+        if (brightnessBelowTiles) {
+            switchToParent(mBrightnessView, parent, index);
+            index++;
+        }
 
         if (mFooter != null) {
             // Then the footer with the settings

@@ -155,6 +155,12 @@ public class QSPanelController extends QSPanelControllerBase<QSPanel> {
         mView.getContentObserver().onChange(true,
                 LineageSettings.Secure.getUriFor(LineageSettings.Secure.QS_SHOW_BRIGHTNESS_SLIDER));
         getContext().getContentResolver().registerContentObserver(
+                LineageSettings.Secure.getUriFor(
+                        LineageSettings.Secure.QS_BRIGHTNESS_SLIDER_POSITION),
+                false, mView.getContentObserver());
+        mView.getContentObserver().onChange(true, LineageSettings.Secure.getUriFor(
+                LineageSettings.Secure.QS_BRIGHTNESS_SLIDER_POSITION));
+        getContext().getContentResolver().registerContentObserver(
                 Settings.Secure.getUriFor(QS_SHOW_BRIGHTNESS), false, mView.getContentObserver());
         mView.getContentObserver().onChange(true,
                 Settings.Secure.getUriFor(QS_SHOW_BRIGHTNESS));

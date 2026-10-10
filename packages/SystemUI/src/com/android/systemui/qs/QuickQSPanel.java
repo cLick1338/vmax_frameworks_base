@@ -51,6 +51,26 @@ public class QuickQSPanel extends QSPanel {
     }
 
     @Override
+    protected void setBrightnessViewMargin() {
+        if (mBrightnessView != null) {
+            MarginLayoutParams lp = (MarginLayoutParams) mBrightnessView.getLayoutParams();
+            lp.topMargin = getResources().getDimensionPixelSize(mBrightnessTop
+                    ? R.dimen.qqs_top_brightness_margin_top
+                    : R.dimen.qqs_bottom_brightness_margin_top);
+            lp.bottomMargin = getResources().getDimensionPixelSize(mBrightnessTop
+                    ? R.dimen.qqs_top_brightness_margin_bottom
+                    : R.dimen.qqs_bottom_brightness_margin_bottom);
+            mBrightnessView.setLayoutParams(lp);
+        }
+    }
+
+    @Override
+    protected boolean isBrightnessSliderShown(int mode) {
+        // Mode 2 keeps the slider visible in the collapsed panel too.
+        return mode == 2;
+    }
+
+    @Override
     public TileLayout getOrCreateTileLayout() {
         QQSSideLabelTileLayout layout = new QQSSideLabelTileLayout(mContext);
         layout.setId(R.id.qqs_tile_layout);

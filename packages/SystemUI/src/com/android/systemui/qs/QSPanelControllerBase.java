@@ -621,6 +621,10 @@ public abstract class QSPanelControllerBase<T extends QSPanel> extends ViewContr
         return mView.getBrightnessView();
     }
 
+    void applyBrightnessVisibility() {
+        mView.applyBrightnessVisibility();
+    }
+
     /**
      * Set a listener to collapse/expand QS.
      * @param action
