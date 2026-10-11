@@ -273,20 +273,34 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
         }
     }
 
+    // Music on the Quad DAC steps finer than AudioManager's steps (10 internal units each)
+    private int getVolumeStepUnits(int stream) {
+        return stream == AudioManager.STREAM_MUSIC ? mAudio.getStreamVolumeStepUnits(stream) : 10;
+    }
+
     protected void setAudioManagerStreamVolume(int stream, int level, int flag) {
+        final int units = getVolumeStepUnits(stream);
+        if (units != 10) {
+            mAudio.setStreamVolumeUnits(stream, level * units, flag);
+            return;
+        }
         mAudio.setStreamVolume(stream, level, flag);
     }
 
     protected int getAudioManagerStreamVolume(int stream) {
+        final int units = getVolumeStepUnits(stream);
+        if (units != 10) {
+            return (mAudio.getLastAudibleStreamVolumeUnits(stream) + units / 2) / units;
+        }
         return mAudio.getLastAudibleStreamVolume(stream);
     }
 
     protected int getAudioManagerStreamMaxVolume(int stream) {
-        return mAudio.getStreamMaxVolume(stream);
+        return mAudio.getStreamMaxVolume(stream) * 10 / getVolumeStepUnits(stream);
     }
 
     protected int getAudioManagerStreamMinVolume(int stream) {
-        return mAudio.getStreamMinVolumeInt(stream);
+        return mAudio.getStreamMinVolumeInt(stream) * 10 / getVolumeStepUnits(stream);
     }
 
     public void register() {
@@ -579,6 +593,9 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
         if (showUI) {
             changed |= updateActiveStreamW(stream);
         }
+        if (stream == AudioManager.STREAM_MUSIC) {
+            changed |= updateStreamRangeW(stream);
+        }
         int lastAudibleStreamVolume = getAudioManagerStreamVolume(stream);
         changed |= updateStreamLevelW(stream, lastAudibleStreamVolume);
         changed |= checkRoutedToBluetoothW(showUI ? AudioManager.STREAM_MUSIC : stream);
@@ -668,6 +685,17 @@ public class VolumeDialogControllerImpl implements VolumeDialogController, Dumpa
         ss.routedToBluetooth = routedToBluetooth;
         if (D.BUG) Log.d(TAG, "updateStreamRoutedToBluetoothW stream=" + stream
                 + " routedToBluetooth=" + routedToBluetooth);
+        return true;
+    }
+
+    // The music range follows the Quad DAC's step size
+    private boolean updateStreamRangeW(int stream) {
+        final StreamState ss = streamStateW(stream);
+        final int min = getAudioManagerStreamMinVolume(stream);
+        final int max = Math.max(1, getAudioManagerStreamMaxVolume(stream));
+        if (ss.levelMin == min && ss.levelMax == max) return false;
+        ss.levelMin = min;
+        ss.levelMax = max;
         return true;
     }
 

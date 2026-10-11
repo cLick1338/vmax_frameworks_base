@@ -1385,6 +1385,52 @@ public class AudioManager {
     }
 
     /**
+     * Last audible volume of the stream in internal units, 10 per step of
+     * {@link #getStreamVolume(int)}.
+     *
+     * @hide
+     */
+    @RequiresPermission("android.permission.QUERY_AUDIO_STATE")
+    public int getLastAudibleStreamVolumeUnits(int streamType) {
+        final IAudioService service = getService();
+        try {
+            return service.getLastAudibleStreamVolumeUnits(streamType);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Internal units per volume step on the stream's current device: 10, or fewer where the
+     * device allows finer steps (music on the Quad DAC).
+     *
+     * @hide
+     */
+    public int getStreamVolumeStepUnits(int streamType) {
+        final IAudioService service = getService();
+        try {
+            return service.getStreamVolumeStepUnits(streamType);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Same as {@link #setStreamVolume(int, int, int)} with the index in internal units.
+     *
+     * @hide
+     */
+    public void setStreamVolumeUnits(int streamType, int index, int flags) {
+        final IAudioService service = getService();
+        try {
+            service.setStreamVolumeUnits(streamType, index, flags,
+                    getContext().getOpPackageName());
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
      * Get the stream type whose volume is driving the UI sounds volume.
      * UI sounds are screen lock/unlock, camera shutter, key clicks...
      * It is assumed that this stream type is also tied to ringer mode changes.

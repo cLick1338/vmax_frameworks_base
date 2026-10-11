@@ -170,6 +170,13 @@ interface IAudioService {
     @EnforcePermission("QUERY_AUDIO_STATE")
     int getLastAudibleStreamVolume(int streamType);
 
+    @EnforcePermission("QUERY_AUDIO_STATE")
+    int getLastAudibleStreamVolumeUnits(int streamType);
+
+    int getStreamVolumeStepUnits(int streamType);
+
+    void setStreamVolumeUnits(int streamType, int index, int flags, String callingPackage);
+
     @EnforcePermission("MODIFY_AUDIO_ROUTING")
     void setSupportedSystemUsages(in int[] systemUsages);
 

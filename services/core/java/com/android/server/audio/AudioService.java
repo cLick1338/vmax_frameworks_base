@@ -322,6 +322,18 @@ public class AudioService extends IAudioService.Stub
 
     private static final String TAG = "AS.AudioService";
 
+    // Music reaches the policy in internal units (10 per step) so the Quad DAC can step finer
+    // than other outputs; the device's policy library scales music to match
+    private static final boolean FINE_MUSIC_VOLUME =
+            SystemProperties.getBoolean("ro.config.media_vol_fine", false);
+    private static final String PROP_HIFI_DAC_ENABLED = "persist.vendor.audio.hifi.enabled";
+    private static final String PROP_DAC_VOLUME_STEPS = "persist.sys.audio.dac_volume_steps";
+    private static final int DEFAULT_DAC_VOLUME_STEPS = 50;
+    private static final String FINE_VOLUME_SETTING_SUFFIX = "_fine";
+    private boolean mHifiDacEnabled;
+    // setStreamVolumeUnits(): the index is already in internal units
+    private static final int FLAG_VOLUME_UNITS = 1 << 30;
+
     private final AudioSystemAdapter mAudioSystem;
     private final SystemServerAdapter mSystemServer;
     private final SettingsAdapter mSettings;
@@ -1756,6 +1768,12 @@ public class AudioService extends IAudioService.Stub
 
     public void onSystemReady() {
         mSystemReady = true;
+        if (FINE_MUSIC_VOLUME) {
+            // The DAC panel reports its toggles; the property itself is set by the audio HAL
+            mHifiDacEnabled = SystemProperties.getBoolean(PROP_HIFI_DAC_ENABLED, false);
+            SystemProperties.addChangeCallback(
+                    () -> mAudioHandler.post(this::onHifiDacPropertyChanged));
+        }
         if (audioserverPermissions()) {
             setupPermissionListener();
         }
@@ -3930,6 +3948,9 @@ public class AudioService extends IAudioService.Stub
             // convert one UI step (+/-1) into a number of internal units on the stream alias
             step = rescaleStep((int) (10 * streamState.getIndexStepFactor()), streamType,
                     streamTypeAlias);
+            if (FINE_MUSIC_VOLUME && streamTypeAlias == AudioSystem.STREAM_MUSIC) {
+                step = getMusicVolumeStep(aliasIndex, direction, device);
+            }
         }
 
         // If either the client forces allowing ringer modes for this adjustment,
@@ -5073,7 +5094,11 @@ public class AudioService extends IAudioService.Stub
 
         oldIndex = streamState.getIndex(device);
 
-        index = rescaleIndex(index * 10, streamType, streamTypeAlias);
+        if ((flags & FLAG_VOLUME_UNITS) != 0) {
+            flags &= ~FLAG_VOLUME_UNITS;
+        } else {
+            index = rescaleIndex(index * 10, streamType, streamTypeAlias);
+        }
 
         if (setStreamVolumeOrder()) {
             flags &= ~AudioManager.FLAG_FIXED_VOLUME;
@@ -5679,6 +5704,84 @@ public class AudioService extends IAudioService.Stub
 
         int device = getDeviceForStream(streamType);
         return (getVssForStreamOrDefault(streamType).getIndex(device) + 5) / 10;
+    }
+
+    @android.annotation.EnforcePermission(QUERY_AUDIO_STATE)
+    /** @see AudioManager#getLastAudibleStreamVolumeUnits(int) */
+    public int getLastAudibleStreamVolumeUnits(int streamType) {
+        super.getLastAudibleStreamVolumeUnits_enforcePermission();
+
+        streamType = replaceBtScoStreamWithVoiceCall(streamType,
+                "getLastAudibleStreamVolumeUnits");
+        ensureValidStreamType(streamType);
+        return getVssForStreamOrDefault(streamType).getIndex(getDeviceForStream(streamType));
+    }
+
+    /** @see AudioManager#getStreamVolumeStepUnits(int) */
+    public int getStreamVolumeStepUnits(int streamType) {
+        ensureValidStreamType(streamType);
+        if (sStreamVolumeAlias.get(streamType, -1) != AudioSystem.STREAM_MUSIC) {
+            return 10;
+        }
+        return getMusicVolumeUnits(getDeviceForStream(AudioSystem.STREAM_MUSIC));
+    }
+
+    /** @see AudioManager#setStreamVolumeUnits(int, int, int) */
+    public void setStreamVolumeUnits(int streamType, int index, int flags,
+            String callingPackage) {
+        if (mHardeningEnforcer.blockVolumeMethod(
+                HardeningEnforcer.METHOD_AUDIO_MANAGER_SET_STREAM_VOLUME)) {
+            return;
+        }
+        setStreamVolumeWithAttributionInt(streamType, index, flags | FLAG_VOLUME_UNITS,
+                /*device*/ null, callingPackage, /*attributionTag*/ null,
+                true /*canChangeMuteAndUpdateController*/);
+    }
+
+    /** Internal units per music volume step on the device: 10, or fewer on the Quad DAC */
+    private int getMusicVolumeUnits(int device) {
+        if (!FINE_MUSIC_VOLUME
+                || (device != AudioSystem.DEVICE_OUT_WIRED_HEADSET
+                        && device != AudioSystem.DEVICE_OUT_WIRED_HEADPHONE)
+                || !SystemProperties.getBoolean(PROP_HIFI_DAC_ENABLED, false)) {
+            return 10;
+        }
+        final int range = MAX_STREAM_VOLUME[AudioSystem.STREAM_MUSIC] * 10;
+        final int steps = SystemProperties.getInt(PROP_DAC_VOLUME_STEPS, DEFAULT_DAC_VOLUME_STEPS);
+        // whole units per step, never coarser than the stock steps
+        if (steps <= 0 || range % steps != 0 || range / steps > 10) {
+            return 10;
+        }
+        return range / steps;
+    }
+
+    /** The Quad DAC was turned on or off: re-send music on the new grid and refresh the UI */
+    private void onHifiDacPropertyChanged() {
+        final boolean enabled = SystemProperties.getBoolean(PROP_HIFI_DAC_ENABLED, false);
+        if (enabled == mHifiDacEnabled) {
+            return;
+        }
+        mHifiDacEnabled = enabled;
+        final int device = getDeviceForStream(AudioSystem.STREAM_MUSIC);
+        if (device != AudioSystem.DEVICE_OUT_WIRED_HEADSET
+                && device != AudioSystem.DEVICE_OUT_WIRED_HEADPHONE) {
+            return;
+        }
+        final VolumeStreamState vss = getVssForStreamOrDefault(AudioSystem.STREAM_MUSIC);
+        sendMsg(mAudioHandler, MSG_SET_DEVICE_VOLUME, SENDMSG_QUEUE, device, 0, vss, 0);
+        final int index = (vss.getIndex(device) + 5) / 10;
+        sendVolumeUpdate(AudioSystem.STREAM_MUSIC, index, index, 0, device);
+    }
+
+    /** One music step on the device's grid, landing on a multiple of it */
+    private int getMusicVolumeStep(int index, int direction, int device) {
+        final int units = getMusicVolumeUnits(device);
+        if (direction == AudioManager.ADJUST_RAISE) {
+            return (index / units + 1) * units - index;
+        } else if (direction == AudioManager.ADJUST_LOWER) {
+            return index - ((index + units - 1) / units - 1) * units;
+        }
+        return units;
     }
 
     /**
@@ -9440,7 +9543,16 @@ public class AudioService extends IAudioService.Stub
                         continue;
                     }
 
-                    mIndexMap.put(device, getValidIndex(10 * index,
+                    int fine = -1;
+                    if (FINE_MUSIC_VOLUME && mStreamType == AudioSystem.STREAM_MUSIC
+                            && hasValidSettingsName()) {
+                        fine = mSettings.getSystemIntForUser(mContentResolver,
+                                getSettingNameForDevice(device) + FINE_VOLUME_SETTING_SUFFIX, -1,
+                                UserHandle.USER_CURRENT);
+                    }
+                    // the fine index only counts while it still rounds to the saved step
+                    mIndexMap.put(device, getValidIndex(
+                            fine >= 0 && (fine + 5) / 10 == index ? fine : 10 * index,
                             true /*hasModifyAudioSettings*/));
                 }
             }
@@ -9492,6 +9604,13 @@ public class AudioService extends IAudioService.Stub
             if (replaceStreamBtSco() && index != 0) {
                 index = (int) (mIndexMin + (index * 10 - mIndexMin) / getIndexStepFactor() + 5)
                         / 10;
+            }
+
+            if (FINE_MUSIC_VOLUME && mStreamType == AudioSystem.STREAM_MUSIC) {
+                // the policy takes music in internal units; only the Quad DAC gets finer ones
+                final boolean fine = getMusicVolumeUnits(device) != 10 && !isFullyMuted()
+                        && index == (getIndex(device) + 5) / 10;
+                index = fine ? getIndex(device) : index * 10;
             }
 
             boolean muted = ringMyCar() ? isFullyMuted() : false;
@@ -10203,6 +10322,12 @@ public class AudioService extends IAudioService.Stub
                         streamState.getSettingNameForDevice(device),
                         (streamState.getIndex(device) + 5) / 10,
                         UserHandle.USER_CURRENT);
+                if (FINE_MUSIC_VOLUME && streamState.mStreamType == AudioSystem.STREAM_MUSIC) {
+                    mSettings.putSystemIntForUser(mContentResolver,
+                            streamState.getSettingNameForDevice(device)
+                                    + FINE_VOLUME_SETTING_SUFFIX,
+                            streamState.getIndex(device), UserHandle.USER_CURRENT);
+                }
             }
         }
 
