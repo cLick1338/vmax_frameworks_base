@@ -52,4 +52,8 @@
         <!-- network type: "5G+" -->
         <item>@string/data_connection_5g_plus_carrier_2032</item>
     </integer-array>
+
+    <!-- Panel width at which the initial display density applies; 0 keeps the initial density as
+         the default regardless of the active resolution. -->
+    <integer name="display_density_base_width">0</integer>
 </resources>

@@ -97,6 +97,7 @@ public class DisplayDensityUtils {
     private final int[] mValues;
 
     private final int mDefaultDensity;
+    private final int mInitialDensity;
     private final int mCurrentIndex;
 
     public DisplayDensityUtils(@NonNull Context context) {
@@ -123,6 +124,7 @@ public class DisplayDensityUtils {
             mEntries = null;
             mValues = null;
             mDefaultDensity = 0;
+            mInitialDensity = 0;
             mCurrentIndex = -1;
             return;
         }
@@ -151,13 +153,15 @@ public class DisplayDensityUtils {
             }
         }
 
-        final int defaultDensity =
+        final int initialDensity =
                 DisplayDensityUtils.getDefaultDensityForDisplay(idOfSmallestDisplay);
+        final int defaultDensity = scaleToActiveMode(context, idOfSmallestDisplay, initialDensity);
         if (defaultDensity <= 0) {
             Log.w(LOG_TAG, "Cannot fetch default density for display " + idOfSmallestDisplay);
             mEntries = null;
             mValues = null;
             mDefaultDensity = 0;
+            mInitialDensity = 0;
             mCurrentIndex = -1;
             return;
         }
@@ -238,6 +242,7 @@ public class DisplayDensityUtils {
         }
 
         mDefaultDensity = defaultDensity;
+        mInitialDensity = initialDensity;
         mCurrentIndex = displayIndex;
         mEntries = entries;
         mValues = values;
@@ -259,6 +264,21 @@ public class DisplayDensityUtils {
 
     public int getDefaultDensity() {
         return mDefaultDensity;
+    }
+
+    /**
+     * Some devices keep the initial density fixed while switching panel resolution. With a base
+     * width configured, the default is the initial density scaled by the active mode's width.
+     */
+    private int scaleToActiveMode(Context context, int displayId, int initialDensity) {
+        final int baseWidth = context.getResources().getInteger(
+                R.integer.display_density_base_width);
+        final Display display = mDisplayManager.getDisplay(displayId);
+        if (initialDensity <= 0 || baseWidth <= 0 || display == null) {
+            return initialDensity;
+        }
+        final int width = display.getMode().getPhysicalWidth();
+        return (int) (((long) initialDensity * width + baseWidth / 2) / baseWidth);
     }
 
     /**
@@ -301,7 +321,12 @@ public class DisplayDensityUtils {
                     }
 
                     final IWindowManager wm = WindowManagerGlobal.getWindowManagerService();
-                    wm.clearForcedDisplayDensityForUser(displayId, userId);
+                    if (mDefaultDensity != mInitialDensity) {
+                        // Clearing would restore the initial density, not this mode's default.
+                        wm.setForcedDisplayDensityForUser(displayId, mDefaultDensity, userId);
+                    } else {
+                        wm.clearForcedDisplayDensityForUser(displayId, userId);
+                    }
                 }
             } catch (RemoteException exc) {
                 Log.w(LOG_TAG, "Unable to clear forced display density setting");
