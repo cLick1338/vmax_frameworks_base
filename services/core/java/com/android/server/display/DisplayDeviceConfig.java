@@ -1213,7 +1213,9 @@ public class DisplayDeviceConfig {
      * @return true if there is sdrHdrRatioMap, false otherwise.
      */
     public boolean hasSdrToHdrRatioSpline() {
-        return mHbmData != null && mHbmData.sdrToHdrRatioSpline != null;
+        return (mHbmData != null && mHbmData.sdrToHdrRatioSpline != null)
+                // Vmax: hdrBrightnessConfig-only displays also report an HDR/SDR ratio
+                || (mHdrBrightnessData != null && mHdrBrightnessData.sdrToHdrRatioSpline != null);
     }
 
     /**
