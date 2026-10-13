@@ -54,6 +54,12 @@ public class HdrBrightnessModifier implements BrightnessStateModifier,
 
     private final ContentObserver mContentObserver;
 
+    // Vmax: user switch for HDR brightness boost (Settings > Display > Colour management & HDR)
+    static final String HDR_BRIGHTNESS_BOOST = "hdr_brightness_boost";
+    private final Uri mHdrBoostSetting = Settings.Global.getUriFor(HDR_BRIGHTNESS_BOOST);
+    private final ContentObserver mHdrBoostObserver;
+    private boolean mHdrBoostEnabled = true;
+
     private final SurfaceControlHdrLayerInfoListener mHdrListener =
             new SurfaceControlHdrLayerInfoListener() {
                 @Override
@@ -120,6 +126,16 @@ public class HdrBrightnessModifier implements BrightnessStateModifier,
                 onLowPowerModeChange();
             }
         };
+        mHdrBoostObserver = new ContentObserver(mHandler) {
+            @Override
+            public void onChange(boolean selfChange) {
+                onHdrBoostSettingChange();
+            }
+        };
+        mHandler.post(() -> {
+            mInjector.registerContentObserver(mHdrBoostObserver, mHdrBoostSetting);
+            onHdrBoostSettingChange();
+        });
         mHandler.post(() -> onDisplayChanged(displayData));
     }
 
@@ -163,12 +179,14 @@ public class HdrBrightnessModifier implements BrightnessStateModifier,
         pw.println("  mPendingTransitionRate=" + mPendingTransitionRate);
         pw.println("  mHdrListener registered=" + (mRegisteredDisplayToken != null));
         pw.println("  mContentObserverRegistered=" + mContentObserverRegistered);
+        pw.println("  mHdrBoostEnabled=" + mHdrBoostEnabled);
     }
 
     // Called in DisplayControllerHandler
     @Override
     public void stop() {
         unregisterHdrListener();
+        mInjector.unregisterContentObserver(mHdrBoostObserver);
         mHandler.removeCallbacksAndMessages(null);
     }
 
@@ -271,6 +289,10 @@ public class HdrBrightnessModifier implements BrightnessStateModifier,
         if (data == null) {
             return Mode.NO_HDR;
         }
+        // Vmax: boost switched off by the user
+        if (!mHdrBoostEnabled) {
+            return Mode.NO_HDR;
+        }
         // no HDR layer present
         if (mHdrLayerSize == DEFAULT_HDR_LAYER_SIZE) {
             return Mode.NO_HDR;
@@ -289,6 +311,16 @@ public class HdrBrightnessModifier implements BrightnessStateModifier,
         }
         // HDR layer > that minHdr % for Hbm
         return Mode.HBM_HDR;
+    }
+
+    private void onHdrBoostSettingChange() {
+        mHdrBoostEnabled = mInjector.isHdrBoostEnabled();
+        Mode newMode = recalculateMode(mHdrBrightnessData);
+        if (newMode != mMode) {
+            mMode = newMode;
+            mTransitionRate = CUSTOM_ANIMATION_RATE_NOT_SET;
+            mClamperChangeListener.onChanged();
+        }
     }
 
     private void onLowPowerModeChange() {
@@ -420,6 +452,11 @@ public class HdrBrightnessModifier implements BrightnessStateModifier,
         boolean isLowPowerMode() {
             return Settings.Global.getInt(
                     mContext.getContentResolver(), Settings.Global.LOW_POWER_MODE, 0) != 0;
+        }
+
+        boolean isHdrBoostEnabled() {
+            return Settings.Global.getInt(
+                    mContext.getContentResolver(), HDR_BRIGHTNESS_BOOST, 1) != 0;
         }
     }
 }

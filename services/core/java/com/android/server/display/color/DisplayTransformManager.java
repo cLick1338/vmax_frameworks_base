@@ -259,7 +259,9 @@ public class DisplayTransformManager {
      * Return true when the specified colorMode requires the color matrix to work in linear space.
      */
     public boolean needsLinearColorMatrix(int colorMode) {
-        return colorMode != ColorDisplayManager.COLOR_MODE_SATURATED;
+        // Vmax: vendor modes are unmanaged here too
+        return colorMode != ColorDisplayManager.COLOR_MODE_SATURATED
+                && colorMode < ColorDisplayManager.VENDOR_COLOR_MODE_RANGE_MIN;
     }
 
     /**
