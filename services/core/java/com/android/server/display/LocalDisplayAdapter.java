@@ -1745,6 +1745,9 @@ final class LocalDisplayAdapter extends DisplayAdapter {
         private final SurfaceControlProxy mSurfaceControlProxy;
 
         private boolean mForceSurfaceControl = false;
+        private final boolean mLegacyHdrDimming = SystemProperties.getBoolean(
+                "debug.sf.legacy_hdr_dimming", false);
+        private boolean mLegacyHdrDimmingActive;
 
         /**
          * @param displayToken Token for display associated with this backlight.
@@ -1777,6 +1780,16 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                             backlight, nits);
                 }
             } else if (mBacklight != null) {
+                // Vmax: Send luminance only during HDR boost and once when returning to SDR.
+                if (mLegacyHdrDimming) {
+                    final boolean dimming = Float.isFinite(sdrNits) && Float.isFinite(nits)
+                            && sdrNits > 0 && nits > sdrNits && backlight > 0;
+                    if (dimming || mLegacyHdrDimmingActive) {
+                        mSurfaceControlProxy.setDisplayBrightness(mDisplayToken, backlight,
+                                dimming ? sdrNits : -1, backlight, dimming ? nits : -1);
+                    }
+                    mLegacyHdrDimmingActive = dimming;
+                }
                 mBacklight.setBrightness(backlight);
             }
         }
