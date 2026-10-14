@@ -2105,6 +2105,28 @@ class DatabaseHelper extends SQLiteOpenHelper {
             loadIntegerSetting(stmt, Settings.System.SCREEN_OFF_TIMEOUT,
                     R.integer.def_screen_off_timeout);
 
+            // QS tile layout
+            loadIntegerSetting(stmt, Settings.System.QS_LAYOUT_COLUMNS,
+                    R.integer.def_qs_layout_columns);
+            loadIntegerSetting(stmt, Settings.System.QS_LAYOUT_COLUMNS_LANDSCAPE,
+                    R.integer.def_qs_layout_columns_landscape);
+            loadIntegerSetting(stmt, Settings.System.QS_LAYOUT_ROWS,
+                    R.integer.def_qs_layout_rows);
+            loadIntegerSetting(stmt, Settings.System.QS_LAYOUT_ROWS_LANDSCAPE,
+                    R.integer.def_qs_layout_rows_landscape);
+            loadIntegerSetting(stmt, Settings.System.QQS_LAYOUT_ROWS,
+                    R.integer.def_qqs_layout_rows);
+            loadIntegerSetting(stmt, Settings.System.QS_TILE_LABEL_SIZE,
+                    R.integer.def_qs_tile_label_size);
+            loadIntegerSetting(stmt, Settings.System.QS_TILE_VERTICAL_LAYOUT,
+                    R.integer.def_qs_tile_vertical_layout);
+            loadIntegerSetting(stmt, Settings.System.QS_TILE_ANIMATION_DURATION,
+                    R.integer.def_qs_tile_animation_duration);
+            loadIntegerSetting(stmt, Settings.System.QS_TILE_ANIMATION_INTERPOLATOR,
+                    R.integer.def_qs_tile_animation_interpolator);
+            loadIntegerSetting(stmt, Settings.System.QUICK_SETTINGS_VIBRATE,
+                    R.integer.def_quick_settings_vibrate);
+
             // Set default cdma DTMF type
             loadSetting(stmt, Settings.System.DTMF_TONE_TYPE_WHEN_DIALING, 0);
 
@@ -2319,6 +2341,8 @@ class DatabaseHelper extends SQLiteOpenHelper {
                     AudioManager.RINGER_MODE_NORMAL);
 
             loadDefaultAnimationSettings(stmt);
+            loadFractionSetting(stmt, Settings.Global.ANIMATOR_DURATION_SCALE,
+                    R.fraction.def_animator_duration_scale, 1);
 
             // --- Previously in 'secure'
             loadBooleanSetting(stmt, Settings.Global.WIFI_ON,
