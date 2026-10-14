@@ -2278,6 +2278,9 @@ class DatabaseHelper extends SQLiteOpenHelper {
             stmt = db.compileStatement("INSERT OR IGNORE INTO global(name,value)"
                     + " VALUES(?,?);");
 
+            loadBooleanSetting(stmt, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
+                    R.bool.def_development_settings_enabled);
+
             // --- Previously in 'system'
             loadBooleanSetting(stmt, Settings.Global.AIRPLANE_MODE_ON,
                     R.bool.def_airplane_mode_on);
