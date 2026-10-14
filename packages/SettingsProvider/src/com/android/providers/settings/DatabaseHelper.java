@@ -2246,6 +2246,9 @@ class DatabaseHelper extends SQLiteOpenHelper {
             loadStringSetting(stmt, Settings.Secure.SCREENSAVER_DEFAULT_COMPONENT,
                     com.android.internal.R.string.config_dreamsDefaultComponent);
 
+            loadStringSetting(stmt, Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES,
+                    R.string.def_theme_customization_overlay_packages);
+
             loadBooleanSetting(stmt, Settings.Secure.ACCESSIBILITY_DISPLAY_MAGNIFICATION_ENABLED,
                     R.bool.def_accessibility_display_magnification_enabled);
 

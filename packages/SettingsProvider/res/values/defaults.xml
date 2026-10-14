@@ -207,6 +207,9 @@
     <!-- Default setting for Settings.Global.MOBILE_DATA_ALWAYS_ON -->
     <bool name="def_mobile_data_always_on">false</bool>
 
+    <!-- Default for Settings.Secure.THEME_CUSTOMIZATION_OVERLAY_PACKAGES -->
+    <string name="def_theme_customization_overlay_packages">{\"android.theme.customization.color_index\":\"8\",\"android.theme.customization.system_palette\":\"E9C44A\",\"android.theme.customization.accent_color\":\"E9C44A\",\"android.theme.customization.color_source\":\"preset\",\"android.theme.customization.theme_style\":\"RAINBOW\"}</string>
+
     <!-- Default for Settings.Secure.BACKUP_LOCAL_TRANSPORT_PARAMETERS -->
     <string name="def_backup_local_transport_parameters"></string>
 
