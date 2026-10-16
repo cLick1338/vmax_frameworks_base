@@ -1783,7 +1783,7 @@ final class LocalDisplayAdapter extends DisplayAdapter {
                 // Vmax: Send luminance only during HDR boost and once when returning to SDR.
                 if (mLegacyHdrDimming) {
                     final boolean dimming = Float.isFinite(sdrNits) && Float.isFinite(nits)
-                            && sdrNits > 0 && nits > sdrNits && backlight > 0;
+                            && sdrNits > 0 && nits > sdrNits * 1.1f && backlight > 0;
                     if (dimming || mLegacyHdrDimmingActive) {
                         mSurfaceControlProxy.setDisplayBrightness(mDisplayToken, backlight,
                                 dimming ? sdrNits : -1, backlight, dimming ? nits : -1);
