@@ -12693,6 +12693,10 @@ public final class Settings {
         @Readable
         public static final String SPOOFING_ROM_HIDE = "spoofing_rom_hide";
 
+        /** Whether UAPP is told it runs on Android 9 so its LG DoP path works. @hide */
+        @Readable
+        public static final String SPOOFING_UAPP_DOP = "spoofing_uapp_dop";
+
         /**
          * Keys we no longer back up under the current schema, but want to continue to
          * process when restoring historical backup datasets.
