@@ -274,8 +274,13 @@ public class ThemeOverlayApplier implements Dumpable {
     ) {
         OverlayManagerTransaction.Builder transaction = getTransactionBuilder();
         try {
-            transaction.setEnabled(getOverlayID(OVERLAY_BLACK_THEME), isBlackMode, currentUser);
-            transaction.setEnabled(getOverlayID("android:neutral"), !isBlackMode, currentUser);
+            transaction.setEnabled(getOverlayID(OVERLAY_BLACK_THEME, currentUser),
+                    isBlackMode, currentUser);
+            OverlayIdentifier neutralOverlay = getOverlayID("android:neutral", currentUser);
+            //Pure black does not create a neutral overlay on first boot.
+            if (neutralOverlay != null) {
+                transaction.setEnabled(neutralOverlay, !isBlackMode, currentUser);
+            }
             mOverlayManager.commit(transaction.build());
             if (onComplete != null) {
                 Log.d(TAG, "Executing onComplete runnable");
@@ -286,20 +291,20 @@ public class ThemeOverlayApplier implements Dumpable {
         }
     }
 
-    private OverlayIdentifier getOverlayID(String name) throws IllegalStateException {
+    private OverlayIdentifier getOverlayID(String name, int userId) throws IllegalStateException {
         if (name.contains(":")) {
             final String[] value = name.split(":");
             final String pkgName = value[0];
             final String overlayName = value[1];
             final List<OverlayInfo> infos =
-                    mOverlayManager.getOverlayInfosForTarget(pkgName, UserHandle.CURRENT);
+                    mOverlayManager.getOverlayInfosForTarget(pkgName, UserHandle.of(userId));
             for (OverlayInfo info : infos) {
                 if (overlayName.equals(info.getOverlayName()))
                     return info.getOverlayIdentifier();
             }
-            throw new IllegalStateException("No overlay found for " + name);
+            return null;
         }
-        OverlayInfo overlayInfo = mOverlayManager.getOverlayInfo(name, UserHandle.CURRENT);
+        OverlayInfo overlayInfo = mOverlayManager.getOverlayInfo(name, UserHandle.of(userId));
         if (overlayInfo != null)
             return overlayInfo.getOverlayIdentifier();
         throw new IllegalStateException("No overlay found for " + name);
