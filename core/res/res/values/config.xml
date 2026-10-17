@@ -1876,6 +1876,11 @@
     <array name="config_screenBrightnessNits">
     </array>
 
+    <!-- Space brightness floats evenly in config_screenBrightnessNits instead of in
+         config_screenBrightnessBacklight, so the gamma slider and ramps are perceptual when the
+         backlight curve is not linear in nits -->
+    <bool name="config_screenBrightnessLinearInNits">false</bool>
+
     <!-- Array of ambient lux threshold values. This is used for determining hysteresis constraint
          values by calculating the index to use for lookup and then setting the constraint value
          to the corresponding value of the array. The new brightening hysteresis constraint value

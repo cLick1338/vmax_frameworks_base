@@ -2626,11 +2626,15 @@ public class DisplayDeviceConfig {
         // Create original brightness splines - not using even dimmer mode arrays - this is
         // so that we can continue to log the original brightness splines.
 
+        // Brightness can be spaced by nits for panels whose backlight curve isn't nits-linear
+        final boolean linearInNits = mNits != null && mNits.length == mBacklight.length
+                && mContext.getResources().getBoolean(
+                        com.android.internal.R.bool.config_screenBrightnessLinearInNits);
+        final float[] axis = linearInNits ? mNits : mBacklight;
         mBrightness = new float[mBacklight.length];
         for (int i = 0; i < mBrightness.length; i++) {
-            mBrightness[i] = MathUtils.map(mBacklight[0],
-                    mBacklight[mBacklight.length - 1],
-                    PowerManager.BRIGHTNESS_MIN, PowerManager.BRIGHTNESS_MAX, mBacklight[i]);
+            mBrightness[i] = MathUtils.map(axis[0], axis[axis.length - 1],
+                    PowerManager.BRIGHTNESS_MIN, PowerManager.BRIGHTNESS_MAX, axis[i]);
         }
         mBrightnessToBacklightSpline = mInterpolationType == INTERPOLATION_LINEAR
                 ? Spline.createLinearSpline(mBrightness, mBacklight)
