@@ -1,6 +1,7 @@
 //Vmax
 package com.android.internal.util;
 
+import android.app.PendingIntent;
 import android.content.Context;
 import android.os.Build;
 import android.provider.Settings;
@@ -13,14 +14,14 @@ public final class UappDopSpoofUtils {
     private static final String TAG = "UappDopSpoof";
     private static final int SPOOF_SDK = 28;
     private static final String SPOOF_RELEASE = "9";
+    private static volatile boolean sSdkSpoofed;
 
     private UappDopSpoofUtils() {}
 
     public static void maybeSpoof(Context context) {
         if (context == null) return;
         String packageName = context.getPackageName();
-        if (!"com.extreamsd.usbaudioplayerpro".equals(packageName)
-                && !"com.extreamsd.usbaudioplayerprotrial".equals(packageName)) {
+        if (!isUappPackage(packageName)) {
             return;
         }
         try {
@@ -29,6 +30,7 @@ public final class UappDopSpoofUtils {
                 return;
             }
             setField("SDK_INT", SPOOF_SDK);
+            sSdkSpoofed = true;
             setField("RELEASE", SPOOF_RELEASE);
             setField("RELEASE_OR_CODENAME", SPOOF_RELEASE);
             setField("RELEASE_OR_PREVIEW_DISPLAY", SPOOF_RELEASE);
@@ -36,6 +38,20 @@ public final class UappDopSpoofUtils {
         } catch (Exception e) {
             Log.e(TAG, "Failed to spoof " + packageName, e);
         }
+    }
+
+    public static int adjustPendingIntentFlags(String packageName, int flags) {
+        // SDK 28 skips UAPP's modern flags, but Android still enforces its real target SDK.
+        if (sSdkSpoofed && isUappPackage(packageName)
+                && (flags & (PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_MUTABLE)) == 0) {
+            return flags | PendingIntent.FLAG_MUTABLE;
+        }
+        return flags;
+    }
+
+    private static boolean isUappPackage(String packageName) {
+        return "com.extreamsd.usbaudioplayerpro".equals(packageName)
+                || "com.extreamsd.usbaudioplayerprotrial".equals(packageName);
     }
 
     private static void setField(String name, Object value) throws Exception {

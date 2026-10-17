@@ -61,6 +61,7 @@ import android.util.proto.ProtoOutputStream;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.os.IResultReceiver;
+import com.android.internal.util.UappDopSpoofUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -570,6 +571,7 @@ public final class PendingIntent implements Parcelable {
     public static PendingIntent getActivityAsUser(Context context, int requestCode,
             @NonNull Intent intent, int flags, Bundle options, UserHandle user) {
         String packageName = context.getPackageName();
+        flags = UappDopSpoofUtils.adjustPendingIntentFlags(packageName, flags);
         String resolvedType = intent.resolveTypeIfNeeded(context.getContentResolver());
         checkPendingIntent(flags, intent, context, /* isActivityResultType */ false);
         try {
@@ -700,6 +702,7 @@ public final class PendingIntent implements Parcelable {
     public static PendingIntent getActivitiesAsUser(Context context, int requestCode,
             @NonNull Intent[] intents, int flags, Bundle options, UserHandle user) {
         String packageName = context.getPackageName();
+        flags = UappDopSpoofUtils.adjustPendingIntentFlags(packageName, flags);
         String[] resolvedTypes = new String[intents.length];
         for (int i=0; i<intents.length; i++) {
             intents[i].migrateExtraStreamToClipData(context);
@@ -757,6 +760,7 @@ public final class PendingIntent implements Parcelable {
     public static PendingIntent getBroadcastAsUser(Context context, int requestCode,
             Intent intent, int flags, UserHandle userHandle) {
         String packageName = context.getPackageName();
+        flags = UappDopSpoofUtils.adjustPendingIntentFlags(packageName, flags);
         String resolvedType = intent.resolveTypeIfNeeded(context.getContentResolver());
         checkPendingIntent(flags, intent, context, /* isActivityResultType */ false);
         try {
@@ -836,6 +840,7 @@ public final class PendingIntent implements Parcelable {
     private static PendingIntent buildServicePendingIntent(Context context, int requestCode,
             Intent intent, int flags, int serviceKind) {
         String packageName = context.getPackageName();
+        flags = UappDopSpoofUtils.adjustPendingIntentFlags(packageName, flags);
         String resolvedType = intent.resolveTypeIfNeeded(context.getContentResolver());
         checkPendingIntent(flags, intent, context, /* isActivityResultType */ false);
         try {
