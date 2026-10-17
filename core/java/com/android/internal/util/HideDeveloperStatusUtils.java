@@ -20,7 +20,7 @@ public final class HideDeveloperStatusUtils {
             return false;
         }
         String packageName = resolver.getPackageName();
-        if (packageName == null) return false;
+        if (packageName == null || "org.lineageos.updater".equals(packageName)) return false;
         if (userId == UserHandle.USER_CURRENT || userId == UserHandle.USER_CURRENT_OR_SELF) {
             userId = resolver.getUserId();
         }
