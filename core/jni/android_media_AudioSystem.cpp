@@ -2729,7 +2729,9 @@ static jint android_media_AudioSystem_getMaxChannelCount(JNIEnv *env, jobject th
 }
 
 static jint android_media_AudioSystem_getMaxSampleRate(JNIEnv *env, jobject thiz) {
-    return SAMPLE_RATE_HZ_MAX;
+    // Allow direct PCM above the mixer limit on devices that support it.
+    return base::GetIntProperty<jint>(
+            "ro.audio.max_sample_rate", SAMPLE_RATE_HZ_MAX, SAMPLE_RATE_HZ_MAX, 384000);
 }
 
 static jint android_media_AudioSystem_getMinSampleRate(JNIEnv *env, jobject thiz) {
