@@ -623,14 +623,15 @@ public class AuthController implements
         } else {
             int xFpLocation = mCachedDisplayInfo.getNaturalWidth() / 2;
             try {
-                xFpLocation = mContext.getResources().getDimensionPixelSize(
+                xFpLocation = (int) (mContext.getResources().getDimensionPixelSize(
                         com.android.systemui.res.R.dimen
-                                .physical_fingerprint_sensor_center_screen_location_x);
+                                .physical_fingerprint_sensor_center_screen_location_x)
+                        * mScaleFactor);
             } catch (Resources.NotFoundException e) {
             }
 
             return new Point(
-                    (int) (xFpLocation * mScaleFactor),
+                    xFpLocation,
                     (int) (mContext.getResources().getDimensionPixelSize(
                             com.android.systemui.res.R.dimen
                                     .physical_fingerprint_sensor_center_screen_location_y)
