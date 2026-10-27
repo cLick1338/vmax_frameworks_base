@@ -33,6 +33,8 @@
     <string name="global_action_restart_more">Restart\u2026</string>
     <!-- Button to restart the device, within the Restart Options dialog -->
     <string name="global_action_restart_system">System</string>
+    <!-- Button to restart SystemUI, within the Restart Options dialog -->
+    <string name="global_action_restart_systemui">SystemUI</string>
     <!-- Button to restart the device into recovery mode, within the Restart Options dialog -->
     <string name="global_action_restart_recovery">Recovery</string>
     <!-- Button to restart the device into bootloader mode, within the Restart Options dialog -->

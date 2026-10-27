@@ -195,6 +195,7 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
     /* Valid settings for restart actions keys.
      * see lineage-sdk config.xml config_restartActionsList */
     private static final String RESTART_ACTION_KEY_RESTART = "restart";
+    private static final String RESTART_ACTION_KEY_RESTART_SYSTEMUI = "restart_systemui";
     private static final String RESTART_ACTION_KEY_RESTART_RECOVERY = "restart_recovery";
     private static final String RESTART_ACTION_KEY_RESTART_BOOTLOADER = "restart_bootloader";
     private static final String RESTART_ACTION_KEY_RESTART_DOWNLOAD = "restart_download";
@@ -720,6 +721,8 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
             }
             if (RESTART_ACTION_KEY_RESTART.equals(actionKey)) {
                 addIfShouldShowAction(mRestartItems, sysAction);
+            } else if (RESTART_ACTION_KEY_RESTART_SYSTEMUI.equals(actionKey)) {
+                addIfShouldShowAction(mRestartItems, new RestartSystemUIAction());
             } else if (RESTART_ACTION_KEY_RESTART_RECOVERY.equals(actionKey)) {
                 addIfShouldShowAction(mRestartItems, recAction);
             } else if (RESTART_ACTION_KEY_RESTART_BOOTLOADER.equals(actionKey)) {
@@ -1103,6 +1106,33 @@ public class GlobalActionsDialogLite implements DialogInterface.OnDismissListene
         @Override
         public void onPress() {
             mWindowManagerFuncs.reboot(false, null);
+        }
+    }
+
+    private final class RestartSystemUIAction extends SinglePressAction {
+        private RestartSystemUIAction() {
+            super(com.android.systemui.res.R.drawable.ic_widgets,
+                    com.android.systemui.res.R.string.global_action_restart_systemui);
+        }
+
+        @Override
+        public boolean showDuringKeyguard() {
+            return false;
+        }
+
+        @Override
+        public boolean showBeforeProvisioning() {
+            return false;
+        }
+
+        @Override
+        public void onPress() {
+            if (ActivityManager.isUserAMonkey()) {
+                return;
+            }
+            // Prevent the legacy power menu from appearing when SystemUI exits.
+            mWindowManagerFuncs.onGlobalActionsHidden();
+            System.exit(0);
         }
     }
 
