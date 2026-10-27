@@ -37,6 +37,7 @@ import com.android.systemui.biometrics.data.repository.FacePropertyRepository
 import com.android.systemui.biometrics.shared.model.UdfpsOverlayParams
 import com.android.systemui.dagger.SysUISingleton
 import com.android.systemui.deviceentry.domain.interactor.AuthRippleInteractor
+import com.android.systemui.keyguard.ScreenLifecycle
 import com.android.systemui.keyguard.WakefulnessLifecycle
 import com.android.systemui.keyguard.shared.model.BiometricUnlockSource
 import com.android.systemui.lifecycle.repeatWhenAttached
@@ -75,6 +76,7 @@ constructor(
     private val keyguardUpdateMonitor: KeyguardUpdateMonitor,
     private val keyguardStateController: KeyguardStateController,
     private val wakefulnessLifecycle: WakefulnessLifecycle,
+    private val screenLifecycle: ScreenLifecycle,
     private val commandRegistry: CommandRegistry,
     private val notificationShadeWindowController: NotificationShadeWindowController,
     private val udfpsControllerProvider: Provider<UdfpsController>,
@@ -90,13 +92,22 @@ constructor(
     ViewController<AuthRippleView>(rippleView),
     CoreStartable,
     KeyguardStateController.Callback,
-    WakefulnessLifecycle.Observer {
+    WakefulnessLifecycle.Observer,
+    ScreenLifecycle.Observer {
 
     @VisibleForTesting internal var startLightRevealScrimOnKeyguardFadingAway = false
     var lightRevealScrimAnimator: ValueAnimator? = null
     var fingerprintSensorLocation: Point? = null
     private var faceSensorLocation: Point? = null
     private var circleReveal: LightRevealEffect? = null
+    private val lightRevealWindowToken = Any()
+    private var ownedReveal: LightRevealEffect? = null
+    private var waitForScreenOn = false
+    private var revealDelayElapsed = false
+    private val revealDelayFinished = Runnable {
+        revealDelayElapsed = true
+        maybeStartLightReveal()
+    }
 
     private var udfpsController: UdfpsController? = null
     private var udfpsRadius: Float = -1f
@@ -129,6 +140,7 @@ constructor(
         keyguardUpdateMonitor.registerCallback(keyguardUpdateMonitorCallback)
         keyguardStateController.addCallback(this)
         wakefulnessLifecycle.addObserver(this)
+        screenLifecycle.addObserver(this)
         commandRegistry.registerCommand("auth-ripple") { AuthRippleCommand() }
     }
 
@@ -140,6 +152,8 @@ constructor(
         configurationController.removeCallback(configurationChangedListener)
         keyguardStateController.removeCallback(this)
         wakefulnessLifecycle.removeObserver(this)
+        screenLifecycle.removeObserver(this)
+        cancelLightReveal()
         commandRegistry.unregisterCommand("auth-ripple")
 
         notificationShadeWindowController.setForcePluginOpen(false, this)
@@ -169,7 +183,9 @@ constructor(
                         ),
                     )
                 logger.showingUnlockRippleAt(it.x, it.y, "FP sensor radius: $udfpsRadius")
-                showUnlockedRipple()
+                showUnlockedRipple(
+                    biometricUnlockController.mode == BiometricUnlockController.MODE_WAKE_AND_UNLOCK
+                )
             }
         } else if (biometricSourceType == BiometricSourceType.FACE) {
             faceSensorLocation?.let {
@@ -190,7 +206,8 @@ constructor(
         }
     }
 
-    private fun showUnlockedRipple() {
+    private fun showUnlockedRipple(gateOnScreenOn: Boolean = false) {
+        cancelLightReveal()
         notificationShadeWindowController.setForcePluginOpen(true, this)
 
         // This code path is not used if the KeyguardTransitionRepository is managing the light
@@ -198,6 +215,13 @@ constructor(
         if (!lightRevealMigration()) {
             if (statusBarStateController.isDozing || biometricUnlockController.isWakeAndUnlock) {
                 circleReveal?.let {
+                    ownedReveal = it
+                    waitForScreenOn = gateOnScreenOn
+                    revealDelayElapsed = false
+                    notificationShadeWindowController.setForcePluginOpen(
+                        true,
+                        lightRevealWindowToken,
+                    )
                     lightRevealScrim.revealAmount = 0f
                     lightRevealScrim.revealEffect = it
                     startLightRevealScrimOnKeyguardFadingAway = true
@@ -212,58 +236,85 @@ constructor(
     }
 
     override fun onKeyguardFadingAwayChanged() {
-        if (lightRevealMigration()) {
+        if (
+            lightRevealMigration() ||
+                !keyguardStateController.isKeyguardFadingAway ||
+                !startLightRevealScrimOnKeyguardFadingAway
+        ) {
             return
         }
+        startLightRevealScrimOnKeyguardFadingAway = false
+        // Preserve animator scaling, and let the fade delay overlap the screen wake.
+        val delay =
+            (keyguardStateController.keyguardFadingAwayDelay * ValueAnimator.getDurationScale())
+                .toLong()
+        lightRevealScrim.postDelayed(revealDelayFinished, delay)
+    }
 
-        if (keyguardStateController.isKeyguardFadingAway) {
-            if (startLightRevealScrimOnKeyguardFadingAway) {
-                lightRevealScrimAnimator?.cancel()
-                lightRevealScrimAnimator =
-                    ValueAnimator.ofFloat(.1f, 1f).apply {
-                        interpolator = Interpolators.LINEAR_OUT_SLOW_IN
-                        duration = RIPPLE_ANIMATION_DURATION
-                        startDelay = keyguardStateController.keyguardFadingAwayDelay
-                        addUpdateListener { animator ->
-                            if (lightRevealScrim.revealEffect != circleReveal) {
-                                // if something else took over the reveal, let's cancel ourselves
-                                cancel()
-                                return@addUpdateListener
-                            }
-                            lightRevealScrim.revealAmount = animator.animatedValue as Float
-                        }
-                        addListener(
-                            object : AnimatorListenerAdapter() {
-                                override fun onAnimationEnd(animation: Animator) {
-                                    // Reset light reveal scrim to the default, so the
-                                    // CentralSurfaces
-                                    // can handle any subsequent light reveal changes
-                                    // (ie: from dozing changes)
-                                    if (lightRevealScrim.revealEffect == circleReveal) {
-                                        lightRevealScrim.revealEffect = LiftReveal
-                                    }
+    override fun onScreenTurnedOn() {
+        maybeStartLightReveal()
+    }
 
-                                    lightRevealScrimAnimator = null
-                                }
-                            }
-                        )
-                        start()
-                    }
-                startLightRevealScrimOnKeyguardFadingAway = false
-            }
+    private fun maybeStartLightReveal() {
+        val effect = ownedReveal ?: return
+        if (
+            !revealDelayElapsed ||
+                lightRevealScrimAnimator != null ||
+                (waitForScreenOn && screenLifecycle.screenState != ScreenLifecycle.SCREEN_ON)
+        ) {
+            return
         }
+        if (lightRevealScrim.revealEffect != effect) {
+            cancelLightReveal()
+            return
+        }
+        val animator =
+            ValueAnimator.ofFloat(.1f, 1f).apply {
+                interpolator = Interpolators.LINEAR_OUT_SLOW_IN
+                duration = RIPPLE_ANIMATION_DURATION
+                addUpdateListener { animation ->
+                    if (lightRevealScrim.revealEffect != effect) {
+                        cancel()
+                        return@addUpdateListener
+                    }
+                    lightRevealScrim.revealAmount = animation.animatedValue as Float
+                }
+                addListener(
+                    object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            finishLightReveal()
+                        }
+                    }
+                )
+            }
+        lightRevealScrimAnimator = animator
+        animator.start()
     }
 
-    /**
-     * Whether we're animating the light reveal scrim from a call to [onKeyguardFadingAwayChanged].
-     */
-    fun isAnimatingLightRevealScrim(): Boolean {
-        return lightRevealScrimAnimator?.isRunning ?: false
+    private fun finishLightReveal() {
+        lightRevealScrim.removeCallbacks(revealDelayFinished)
+        if (ownedReveal != null && lightRevealScrim.revealEffect == ownedReveal) {
+            lightRevealScrim.revealAmount = 1f
+            lightRevealScrim.revealEffect = LiftReveal
+        }
+        ownedReveal = null
+        lightRevealScrimAnimator = null
+        startLightRevealScrimOnKeyguardFadingAway = false
+        revealDelayElapsed = false
+        waitForScreenOn = false
+        notificationShadeWindowController.setForcePluginOpen(false, lightRevealWindowToken)
     }
+
+    private fun cancelLightReveal() {
+        lightRevealScrimAnimator?.cancel()
+        finishLightReveal()
+    }
+
+    /** Includes the pending reveal so keyguard cleanup cannot uncover it before screen-on. */
+    fun isAnimatingLightRevealScrim(): Boolean = ownedReveal != null
 
     override fun onStartedGoingToSleep() {
-        // reset the light reveal start in case we were pending an unlock
-        startLightRevealScrimOnKeyguardFadingAway = false
+        cancelLightReveal()
     }
 
     fun updateSensorLocation() {
