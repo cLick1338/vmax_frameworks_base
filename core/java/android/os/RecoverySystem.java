@@ -585,6 +585,13 @@ public class RecoverySystem {
     @RequiresPermission(android.Manifest.permission.RECOVERY)
     public static void installPackage(Context context, File packageFile, boolean processed)
             throws IOException {
+        installPackage(context, packageFile, processed, false);
+    }
+
+    /** @hide */
+    @RequiresPermission(android.Manifest.permission.RECOVERY)
+    public static void installPackage(Context context, File packageFile, boolean processed,
+            boolean preserveBoot) throws IOException {
         synchronized (sRequestLock) {
             LOG_FILE.delete();
             // Must delete the file in case it was created by system server.
@@ -633,6 +640,9 @@ public class RecoverySystem {
             final String securityArg = "--security\n";
 
             String command = filenameArg + localeArg;
+            if (preserveBoot) {
+                command += "--vmax_preserve_boot\n";
+            }
             if (securityUpdate) {
                 command += securityArg;
             }
