@@ -11604,6 +11604,13 @@ public final class Settings {
                 "night_display_color_temperature";
 
         /**
+         * Use monochromatic red instead of the warm Night display tint. Defaults to 0 (off).
+         * @hide
+         */
+        @Readable
+        public static final String NIGHT_DISPLAY_RED_MODE = "night_display_red_mode";
+
+        /**
          * Custom time when Night display is scheduled to activate.
          * Represented as milliseconds from midnight (e.g. 79200000 == 10pm).
          * @hide

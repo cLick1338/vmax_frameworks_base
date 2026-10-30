@@ -104,6 +104,7 @@ public class SecureSettings {
         Settings.Secure.NIGHT_DISPLAY_CUSTOM_START_TIME,
         Settings.Secure.NIGHT_DISPLAY_CUSTOM_END_TIME,
         Settings.Secure.NIGHT_DISPLAY_COLOR_TEMPERATURE,
+        Settings.Secure.NIGHT_DISPLAY_RED_MODE,
         Settings.Secure.NIGHT_DISPLAY_AUTO_MODE,
         Settings.Secure.DISPLAY_WHITE_BALANCE_ENABLED,
         Settings.Secure.SYNC_PARENT_SOUNDS,

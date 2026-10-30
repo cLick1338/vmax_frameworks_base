@@ -351,6 +351,11 @@ public final class ColorDisplayService extends SystemService {
                             case Secure.NIGHT_DISPLAY_AUTO_MODE:
                                 onNightDisplayAutoModeChanged(getNightDisplayAutoModeInternal());
                                 break;
+                            case Secure.NIGHT_DISPLAY_RED_MODE:
+                                mNightDisplayTintController.setMatrix(
+                                        mNightDisplayTintController.getColorTemperatureSetting());
+                                mHandler.sendEmptyMessage(MSG_APPLY_NIGHT_DISPLAY_IMMEDIATE);
+                                break;
                             case Secure.NIGHT_DISPLAY_CUSTOM_START_TIME:
                                 onNightDisplayCustomStartTimeChanged(
                                         getNightDisplayCustomStartTimeInternal().getLocalTime());
@@ -398,6 +403,8 @@ public final class ColorDisplayService extends SystemService {
         cr.registerContentObserver(Secure.getUriFor(Secure.NIGHT_DISPLAY_ACTIVATED),
                 false /* notifyForDescendants */, mContentObserver, mCurrentUser);
         cr.registerContentObserver(Secure.getUriFor(Secure.NIGHT_DISPLAY_COLOR_TEMPERATURE),
+                false /* notifyForDescendants */, mContentObserver, mCurrentUser);
+        cr.registerContentObserver(Secure.getUriFor(Secure.NIGHT_DISPLAY_RED_MODE),
                 false /* notifyForDescendants */, mContentObserver, mCurrentUser);
         cr.registerContentObserver(Secure.getUriFor(Secure.NIGHT_DISPLAY_AUTO_MODE),
                 false /* notifyForDescendants */, mContentObserver, mCurrentUser);
@@ -1132,6 +1139,7 @@ public final class ColorDisplayService extends SystemService {
         if (mNightDisplayTintController.isAvailable(getContext())) {
             pw.println("    Activated: " + mNightDisplayTintController.isActivated());
             pw.println("    Color temp: " + mNightDisplayTintController.getColorTemperature());
+            pw.println("    Red mode: " + mNightDisplayTintController.isRedModeEnabled());
         } else {
             pw.println("    Not available");
         }
@@ -1439,6 +1447,16 @@ public final class ColorDisplayService extends SystemService {
 
             Matrix.setIdentityM(mMatrix, 0);
 
+            if (isRedModeEnabled()) {
+                // Map luminance to red while keeping green and blue at zero.
+                mMatrix[0] = .2126f;
+                mMatrix[4] = .7152f;
+                mMatrix[8] = .0722f;
+                mMatrix[5] = 0f;
+                mMatrix[10] = 0f;
+                return;
+            }
+
             final float squareTemperature = cct * cct;
             final float red = squareTemperature * mColorTempCoefficients[0]
                     + cct * mColorTempCoefficients[1] + mColorTempCoefficients[2];
@@ -1542,6 +1560,12 @@ public final class ColorDisplayService extends SystemService {
             }
             return Secure.getIntForUser(getContext().getContentResolver(),
                     Secure.NIGHT_DISPLAY_ACTIVATED, 0, mCurrentUser) == 1;
+        }
+
+        boolean isRedModeEnabled() {
+            return mCurrentUser != UserHandle.USER_NULL && Secure.getIntForUser(
+                    getContext().getContentResolver(), Secure.NIGHT_DISPLAY_RED_MODE,
+                    0, mCurrentUser) == 1;
         }
 
         int getColorTemperatureSetting() {
