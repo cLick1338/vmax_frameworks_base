@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -80,6 +81,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.quality.Strictness;
 
@@ -215,6 +217,33 @@ public class RecentsTransitionHandlerTest extends ShellTestCase {
         mMainExecutor.flushAll();
 
         assertThat(listener.getState()).isEqualTo(TRANSITION_STATE_ANIMATING);
+    }
+
+    @Test
+    public void testRunnerDeath_finishesTransitionOnShellExecutor() throws Exception {
+        final IRecentsAnimationRunner runner = mock(IRecentsAnimationRunner.class);
+        final IBinder runnerBinder = mock(IBinder.class);
+        when(runner.asBinder()).thenReturn(runnerBinder);
+        final IBinder transition = new Binder();
+        when(mTransitions.startTransition(anyInt(), any(), any())).thenReturn(transition);
+        mRecentsTransitionHandler.startRecentsTransition(mock(PendingIntent.class), new Intent(),
+                new Bundle(), mock(IApplicationThread.class), runner);
+        final Transitions.TransitionFinishCallback finishCallback =
+                mock(Transitions.TransitionFinishCallback.class);
+        mRecentsTransitionHandler.startAnimation(transition, createTransitionInfo(),
+                new StubTransaction(), new StubTransaction(), finishCallback);
+        mMainExecutor.flushAll();
+        final ArgumentCaptor<IBinder.DeathRecipient> deathRecipient =
+                ArgumentCaptor.forClass(IBinder.DeathRecipient.class);
+        verify(runnerBinder).linkToDeath(deathRecipient.capture(), anyInt());
+
+        deathRecipient.getValue().binderDied();
+        verify(finishCallback, never()).onTransitionFinished(any());
+        assertThat(mRecentsTransitionHandler.findController(transition)).isNotNull();
+
+        mMainExecutor.flushAll();
+        verify(finishCallback).onTransitionFinished(any());
+        assertNull(mRecentsTransitionHandler.findController(transition));
     }
 
     @Test

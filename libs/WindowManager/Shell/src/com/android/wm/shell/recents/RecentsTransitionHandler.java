@@ -412,12 +412,12 @@ public class RecentsTransitionHandler implements Transitions.TransitionHandler,
         RecentsController(IRecentsAnimationRunner listener) {
             mInstanceId = System.identityHashCode(this);
             mListener = listener;
-            mDeathHandler = () -> {
+            mDeathHandler = () -> mExecutor.execute(() -> {
                 ProtoLog.v(ShellProtoLogGroup.WM_SHELL_RECENTS_TRANSITION,
                         "[%d] RecentsController.DeathRecipient: binder died", mInstanceId);
                 finishInner(mWillFinishToHome, false /* leaveHint */, null /* finishCb */,
                         "deathRecipient");
-            };
+            });
             try {
                 mListener.asBinder().linkToDeath(mDeathHandler, 0 /* flags */);
             } catch (RemoteException e) {
