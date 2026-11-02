@@ -142,7 +142,7 @@ public class CameraConstrainedHighSpeedCaptureSessionImpl
         Iterator<Surface> iterator = outputSurfaces.iterator();
         Surface firstSurface = iterator.next();
         Surface secondSurface = null;
-        if (outputSurfaces.size() == 1 && SurfaceUtils.isSurfaceForHwVideoEncoder(firstSurface)) {
+        if (outputSurfaces.size() == 1 && !SurfaceUtils.isSurfaceForHwVideoEncoder(firstSurface)) {
             singleTargetRequestBuilder.set(CaptureRequest.CONTROL_CAPTURE_INTENT,
                     CaptureRequest.CONTROL_CAPTURE_INTENT_PREVIEW);
         } else {
