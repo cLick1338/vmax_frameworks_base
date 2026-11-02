@@ -37,9 +37,6 @@
          used for picking activities to handle an intent. -->
     <integer name="config_maxResolverActivityColumns">3</integer>
 
-    <!-- Use a larger scaling span for larger screen devices. -->
-    <dimen name="config_minScalingSpan">32mm</dimen>
-
     <integer name="config_dockedStackDividerSnapMode">1</integer>
 
     <!-- Controls whether the nav bar can move from the bottom to the side in landscape.
